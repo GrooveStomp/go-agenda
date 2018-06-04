@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+type inputHandler func(*tcell.EventKey) *tcell.EventKey
+
+func createEscHandler(callback func()) inputHandler {
+	return func(eventKey *tcell.EventKey) *tcell.EventKey {
+		if eventKey.Key() == tcell.KeyEsc {
+			callback()
+			return nil
+		}
+		return eventKey
+	}
+}
+
 func main() {
 	box := tview.NewBox()
 	box.SetBorder(true)
@@ -46,6 +58,13 @@ x        Mark an item as complete.
 	currentPage := "main"
 	lastPage := "main"
 
+	help.SetInputCapture(createEscHandler(func() {
+		currentPage = lastPage
+		lastPage = "help"
+		helpShown = false
+		pages.SwitchToPage(currentPage)
+	}))
+
 	app := tview.NewApplication()
 	app.SetInputCapture(func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
@@ -57,7 +76,7 @@ x        Mark an item as complete.
 			if currentPage != "main" {
 				return
 			}
-			
+
 			if boxShown {
 				flex.RemoveItem(box)
 				boxShown = false
@@ -67,20 +86,20 @@ x        Mark an item as complete.
 			}
 			result = nil
 		} else if event.Rune() == '?' {
-			if helpShown {
-				tmp := currentPage
-				currentPage = lastPage
-				lastPage = tmp
-				pages.SwitchToPage(currentPage)
-				helpShown = false
-			} else {
-				lastPage = currentPage
-				currentPage = "help"
-				pages.SwitchToPage(currentPage)
-				helpShown = true
-			}
+			// if helpShown {
+			// 	tmp := currentPage
+			// 	currentPage = lastPage
+			// 	lastPage = tmp
+			// 	pages.SwitchToPage(currentPage)
+			// 	helpShown = false
+			// } else {
+			lastPage = currentPage
+			currentPage = "help"
+			pages.SwitchToPage(currentPage)
+			helpShown = true
+			// }
 		}
-		
+
 		app.Draw()
 
 		return
