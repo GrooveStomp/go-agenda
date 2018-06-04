@@ -18,10 +18,19 @@ func createEscHandler(callback func()) inputHandler {
 	}
 }
 
+var debugOut *tview.TextView
+
 func main() {
 	box := tview.NewBox()
 	box.SetBorder(true)
 	box.SetTitle("A [red]c[yellow]o[green]l[darkcyan]o[blue]r[darkmagenta]f[red]u[yellow]l[white] [black:red]c[:yellow]o[:green]l[:darkcyan]o[:blue]r[:darkmagenta]f[:red]u[:yellow]l[white:] [::bu]title")
+
+	mainGrid := tview.NewGrid()
+
+	debugOut = tview.NewTextView()
+	debugOut.SetTitle("Debug Output")
+	debugOut.SetBorder(true)
+	debugOut.SetText("Hello Daniela")
 
 	list := tview.NewList()
 	list.SetBorder(true)
@@ -45,13 +54,18 @@ x        Mark an item as complete.
 `))
 
 	flex := tview.NewFlex()
-	flex.SetFullScreen(true)
+	flex.SetFullScreen(false)
 	flex.SetDirection(tview.FlexColumn)
 	flex.AddItem(list, 0, 1, true)
 
 	pages := tview.NewPages()
 	pages.AddPage("main", flex, true, true)
 	pages.AddPage("help", help, true, false)
+
+	mainGrid.SetRows(-4, 3)
+	mainGrid.SetColumns(-1)
+	mainGrid.AddItem(pages, 0, 0, 1, 1, 1, 1, true)
+	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
 
 	boxShown := false
 	helpShown := false
@@ -62,6 +76,7 @@ x        Mark an item as complete.
 		currentPage = lastPage
 		lastPage = "help"
 		helpShown = false
+		debugOut.SetText("Exiting Help")
 		pages.SwitchToPage(currentPage)
 	}))
 
@@ -77,27 +92,20 @@ x        Mark an item as complete.
 				return
 			}
 
-			if boxShown {
-				flex.RemoveItem(box)
-				boxShown = false
-			} else {
+			if !boxShown {
 				flex.AddItem(box, 0, 1, true)
+				app.SetFocus(box)
 				boxShown = true
+				result = nil
+				debugOut.SetText("Showing Box")
 			}
-			result = nil
 		} else if event.Rune() == '?' {
-			// if helpShown {
-			// 	tmp := currentPage
-			// 	currentPage = lastPage
-			// 	lastPage = tmp
-			// 	pages.SwitchToPage(currentPage)
-			// 	helpShown = false
-			// } else {
 			lastPage = currentPage
 			currentPage = "help"
 			pages.SwitchToPage(currentPage)
 			helpShown = true
-			// }
+			result = nil
+			debugOut.SetText("Showing Help")
 		}
 
 		app.Draw()
@@ -105,7 +113,22 @@ x        Mark an item as complete.
 		return
 	})
 
-	if err := app.SetRoot(pages, true).Run(); err != nil {
+	// box.SetInputCapture(func(eventKey *tcell.EventKey) *tcell.EventKey {
+	// 	if eventKey.Key() == tcell.KeyRune && eventKey.Rune() == 't' {
+	// 		flex.RemoveItem(box)
+	// 		boxShown = false
+	// 		debugOut.SetText("Exiting Box")
+	// 		return nil
+	// 	}
+	// 	return eventKey
+	// })
+	box.SetInputCapture(createEscHandler(func() {
+		flex.RemoveItem(box)
+		boxShown = false
+		debugOut.SetText("Exiting Box")
+	}))
+
+	if err := app.SetRoot(mainGrid, true).Run(); err != nil {
 		panic(err)
 	}
 }
