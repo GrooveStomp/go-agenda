@@ -49,7 +49,7 @@ func createEscHandler(callback func()) hndlstack.InputHandler {
 			// NOTE(AARONO): Apparently returning nil here causes laggy behavior where
 			// it seems like Esc needs to be hit twice.
 		}
-		return eventKey
+		return nil
 	}
 }
 
@@ -116,6 +116,7 @@ x        Mark an item as complete.
 		debugOut.SetText("Exiting Help")
 		pages.SwitchToPage(currentPage)
 		handlers.Pop()
+		app.Draw()
 	})
 
 	box := tview.NewBox()
@@ -130,6 +131,7 @@ x        Mark an item as complete.
 		boxShown = false
 		debugOut.SetText("Box Exited")
 		handlers.Pop()
+		app.Draw()
 	})
 
 	flexWidget := Widget{}
