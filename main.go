@@ -31,7 +31,7 @@ import (
 )
 
 type Widget struct {
-	Primitive tview.Primitive
+	Primitive    tview.Primitive
 	InputHandler hndlstack.InputHandler
 }
 
@@ -46,7 +46,8 @@ func createEscHandler(callback func()) hndlstack.InputHandler {
 	return func(eventKey *tcell.EventKey) *tcell.EventKey {
 		if eventKey.Key() == tcell.KeyEsc {
 			callback()
-			return nil
+			// NOTE(AARONO): Apparently returning nil here causes laggy behavior where
+			// it seems like Esc needs to be hit twice.
 		}
 		return eventKey
 	}
@@ -55,10 +56,6 @@ func createEscHandler(callback func()) hndlstack.InputHandler {
 var debugOut *tview.TextView
 
 func main() {
-	box := tview.NewBox()
-	box.SetBorder(true)
-	box.SetTitle("A [red]c[yellow]o[green]l[darkcyan]o[blue]r[darkmagenta]f[red]u[yellow]l[white] [black:red]c[:yellow]o[:green]l[:darkcyan]o[:blue]r[:darkmagenta]f[:red]u[:yellow]l[white:] [::bu]title")
-
 	mainGrid := tview.NewGrid()
 
 	debugOut = tview.NewTextView()
@@ -75,6 +72,11 @@ func main() {
 	list.AddItem("Example 4", "Description 4", 0, nil)
 	list.AddItem("Example 5", "Description 5", 0, nil)
 
+	flex := tview.NewFlex()
+	flex.SetFullScreen(false)
+	flex.SetDirection(tview.FlexColumn)
+	flex.AddItem(list, 0, 1, true)
+
 	help := tview.NewTextView()
 	help.SetBorder(true)
 	help.SetTitle("help")
@@ -87,16 +89,11 @@ x        Mark an item as complete.
 <esc>    Quit any popups, dialogs or modals.
 `))
 
-	flex := tview.NewFlex()
-	flex.SetFullScreen(false)
-	flex.SetDirection(tview.FlexColumn)
-	flex.AddItem(list, 0, 1, true)
-
 	pages := tview.NewPages()
 	pages.AddPage("main", flex, true, true)
 	pages.AddPage("help", help, true, false)
 
-	mainGrid.SetRows(-4, 3)
+	mainGrid.SetRows(-1, 3)
 	mainGrid.SetColumns(-1)
 	mainGrid.AddItem(pages, 0, 0, 1, 1, 1, 1, true)
 	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
@@ -121,6 +118,10 @@ x        Mark an item as complete.
 		handlers.Pop()
 	})
 
+	box := tview.NewBox()
+	box.SetBorder(true)
+	box.SetTitle("A [red]c[yellow]o[green]l[darkcyan]o[blue]r[darkmagenta]f[red]u[yellow]l[white] [black:red]c[:yellow]o[:green]l[:darkcyan]o[:blue]r[:darkmagenta]f[:red]u[:yellow]l[white:] [::bu]title")
+
 	boxWidget := Widget{}
 	boxWidget.Primitive = box
 	boxWidget.InputHandler = createEscHandler(func() {
@@ -135,29 +136,22 @@ x        Mark an item as complete.
 	flexWidget.Primitive = flex
 	flexWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
-		if event.Key() != tcell.KeyRune {
-			return
-		}
 
-		if event.Rune() == 't' {
-			if currentPage != "main" {
-				return
-			}
-
+		if event.Key() == tcell.KeyRune && event.Rune() == 't' {
 			if !boxShown {
 				handlers.Push(boxWidget.InputHandler)
 				flex.AddItem(box, 0, 1, true)
 				app.SetFocus(box)
 				boxShown = true
-				result = nil
 				debugOut.SetText("Showing Box")
+				result = nil
 			}
+
+			app.Draw()
 		}
 
-		app.Draw()
-
 		return
-	}	
+	}
 
 	pagesWidget := Widget{}
 	pagesWidget.Primitive = pages
@@ -227,12 +221,6 @@ func addItemPage(pages *tview.Pages, dialogNum int) string {
 	grid.AddItem(title, 0, 0, 1, 1, 1, 1, true)
 	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
 	grid.AddItem(tags, 2, 0, 1, 1, 1, 1, false)
-
-	// NOTE(AARONO): This input handler doesn't work when attached at this level.
-	grid.SetInputCapture(createEscHandler(func() {
-		debugOut.SetText(fmt.Sprintf("Exiting %v", name))
-		pages.RemovePage(name)
-	}))
 
 	pages.AddPage(name, grid, true, false)
 	pages.SwitchToPage(name)
