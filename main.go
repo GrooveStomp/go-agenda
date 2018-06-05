@@ -2,6 +2,10 @@ package main
 
 /*
 
+TODO:
+- Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
+- Prototype and experiment with fluidity and mechanics of building nestable, hierarchical lists in the UI.
+
 Org-Mode is a hierarchical outline.
 It consists of headlines and collapsing portions of the document.
 
@@ -22,18 +26,23 @@ import (
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"strings"
+
+	"code.groovestomp.com/agenda/internal/hndlstack"
 )
 
-type agendaItem struct {
+type Widget struct {
+	Primitive tview.Primitive
+	InputHandler hndlstack.InputHandler
+}
+
+type AgendaItem struct {
 	Title  string
 	Bodies []string // We can have N bodies separated by N-1 Links to other agenda items.
-	Links  []agendaItem
+	Links  []AgendaItem
 	Tags   []string
 }
 
-type inputHandler func(*tcell.EventKey) *tcell.EventKey
-
-func createEscHandler(callback func()) inputHandler {
+func createEscHandler(callback func()) hndlstack.InputHandler {
 	return func(eventKey *tcell.EventKey) *tcell.EventKey {
 		if eventKey.Key() == tcell.KeyEsc {
 			callback()
@@ -98,16 +107,33 @@ x        Mark an item as complete.
 	lastPage := "main"
 	addItemCount := 0
 
-	help.SetInputCapture(createEscHandler(func() {
+	app := tview.NewApplication()
+	handlers := hndlstack.InputHandlerStack{}
+
+	helpWidget := Widget{}
+	helpWidget.Primitive = help
+	helpWidget.InputHandler = createEscHandler(func() {
 		currentPage = lastPage
 		lastPage = "help"
 		helpShown = false
 		debugOut.SetText("Exiting Help")
 		pages.SwitchToPage(currentPage)
-	}))
+		handlers.Pop()
+	})
 
-	app := tview.NewApplication()
-	app.SetInputCapture(func(event *tcell.EventKey) (result *tcell.EventKey) {
+	boxWidget := Widget{}
+	boxWidget.Primitive = box
+	boxWidget.InputHandler = createEscHandler(func() {
+		debugOut.SetText("Exiting Box")
+		flex.RemoveItem(box)
+		boxShown = false
+		debugOut.SetText("Box Exited")
+		handlers.Pop()
+	})
+
+	flexWidget := Widget{}
+	flexWidget.Primitive = flex
+	flexWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
 		if event.Key() != tcell.KeyRune {
 			return
@@ -119,13 +145,30 @@ x        Mark an item as complete.
 			}
 
 			if !boxShown {
+				handlers.Push(boxWidget.InputHandler)
 				flex.AddItem(box, 0, 1, true)
 				app.SetFocus(box)
 				boxShown = true
 				result = nil
 				debugOut.SetText("Showing Box")
 			}
-		} else if event.Rune() == '?' && !helpShown {
+		}
+
+		app.Draw()
+
+		return
+	}	
+
+	pagesWidget := Widget{}
+	pagesWidget.Primitive = pages
+	pagesWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
+		result = event
+		if event.Key() != tcell.KeyRune {
+			return
+		}
+
+		if event.Rune() == '?' && !helpShown {
+			handlers.Push(helpWidget.InputHandler)
 			lastPage = currentPage
 			currentPage = "help"
 			pages.SwitchToPage(currentPage)
@@ -144,43 +187,13 @@ x        Mark an item as complete.
 		app.Draw()
 
 		return
-	})
+	}
 
-	// NOTE(AARON): This input capture doesn't seem to do anything.
-	// pages.SetInputCapture(func(eventKey *tcell.EventKey) (resultKey *tcell.EventKey) {
-	// 	resultKey = eventKey
-	// 	if eventKey.Key() == tcell.KeyRune && eventKey.Rune() == '?' && !helpShown {
-	// 		lastPage = currentPage
-	// 		currentPage = "help"
-	// 		pages.SwitchToPage(currentPage)
-	// 		helpShown = true
-	// 		resultKey = nil
-	// 		debugOut.SetText("Showing Help")
-	// 	}
-	// 	return
-	// })
-
-	// NOTE(AARON): This input capture doesn't seem to do anything.
-	// pages.SetInputCapture(func(eventKey *tcell.EventKey) (resultKey *tcell.EventKey) {
-	// 	resultKey = eventKey
-	// 	if eventKey.Key() == tcell.KeyRune && eventKey.Rune() == 't' && !boxShown {
-	// 		flex.AddItem(box, 0, 1, true)
-	// 		app.SetFocus(box)
-	// 		boxShown = true
-	// 		debugOut.SetText("Showing Box")
-	// 		resultKey = nil
-	// 	}
-	// 	return
-	// })
-
-	box.SetInputCapture(createEscHandler(func() {
-		debugOut.SetText("Exiting Box")
-		flex.RemoveItem(box)
-		boxShown = false
-		debugOut.SetText("Box Exited")
-	}))
+	handlers.Push(pagesWidget.InputHandler)
+	handlers.Push(flexWidget.InputHandler)
 
 	app.SetFocus(pages)
+	app.SetInputCapture(createAppInputHandler(&handlers))
 	if err := app.SetRoot(mainGrid, true).Run(); err != nil {
 		panic(err)
 	}
@@ -225,4 +238,18 @@ func addItemPage(pages *tview.Pages, dialogNum int) string {
 	pages.SwitchToPage(name)
 
 	return name
+}
+
+func createAppInputHandler(stack *hndlstack.InputHandlerStack) hndlstack.InputHandler {
+	return func(event *tcell.EventKey) *tcell.EventKey {
+		result := event
+		for i := len(stack.InputHandler) - 1; i >= 0; i-- {
+			handler := stack.InputHandler[i]
+			res := handler(event)
+			if res == nil {
+				return nil
+			}
+		}
+		return result
+	}
 }
