@@ -26,27 +26,7 @@ import (
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"strings"
-
-	d "code.groovestomp.com/agenda/internal/datatypes"
-	"code.groovestomp.com/agenda/internal/hndlstack"
 )
-
-type Widget struct {
-	Primitive    tview.Primitive
-	InputHandler hndlstack.InputHandler
-}
-
-func createEscHandler(callback func()) hndlstack.InputHandler {
-	return func(eventKey *tcell.EventKey) *tcell.EventKey {
-		if eventKey.Key() == tcell.KeyEsc {
-			callback()
-			// NOTE(AARONO): Apparently returning nil here causes laggy behavior where
-			// it seems like Esc needs to be hit twice.
-			return nil
-		}
-		return eventKey
-	}
-}
 
 var (
 	debugOut     *tview.TextView
@@ -63,7 +43,7 @@ func main() {
 	currentPage = "main"
 	lastPage = "main"
 	addItemCount = 0
-	root := d.NewNode("", "", []string{})
+	root := NewNode("", "", []string{})
 
 	mainGrid := tview.NewGrid()
 
@@ -108,7 +88,7 @@ x        Mark an item as complete.
 	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
 
 	app := tview.NewApplication()
-	handlers := hndlstack.InputHandlerStack{}
+	handlers := InputHandlerStack{}
 
 	helpWidget := Widget{}
 	helpWidget.Primitive = help
@@ -198,15 +178,22 @@ x        Mark an item as complete.
 	if err := app.SetRoot(mainGrid, true).Run(); err != nil {
 		panic(err)
 	}
+
+	print := func(node *AgendaNode, depth int) {
+		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
+		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
+	}
+
+	root.Walk(print)
 }
 
-func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, pages *tview.Pages, dialogNum int, tree *d.AgendaNode) string {
+func addItemPage(app *tview.Application, handlers *InputHandlerStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) string {
 	/*
 		This should have its own input handler to:
 		- tab between elements.
 		- record data in a common datastructure.
 	*/
-	node := d.NewNode("", "", []string{})
+	node := NewNode("", "", []string{})
 	name := fmt.Sprintf("addAgendaItem%v", dialogNum)
 
 	grid := tview.NewGrid()
@@ -232,9 +219,11 @@ func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, 
 		switch key {
 		case tcell.KeyEnter:
 			node.Title = title.GetText()
+			app.SetFocus(body)
 		case tcell.KeyTab:
 			app.SetFocus(body)
 		case tcell.KeyEsc:
+			node.Title = title.GetText()
 			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyBacktab:
 			debugOut.SetText("<backtab>")
@@ -245,9 +234,6 @@ func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, 
 		debugOut.SetText(text)
 		app.Draw()
 	})
-	title.SetAcceptanceFunc(func(toCheck string, lastChar rune) bool {
-		return true
-	})
 
 	body.SetBorder(true)
 	body.SetTitle("Full Description")
@@ -255,14 +241,20 @@ func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, 
 		switch key {
 		case tcell.KeyEnter:
 			node.Text = body.GetText()
+			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyTab:
-			app.SetFocus(body)
+			debugOut.SetText("<tab>")
 		case tcell.KeyEsc:
+			node.Text = body.GetText()
 			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyBacktab:
-			debugOut.SetText("<backtab>")
+			app.SetFocus(title)
 		default:
 		}
+	})
+	body.SetChangedFunc(func(text string) {
+		debugOut.SetText(text)
+		app.Draw()
 	})
 
 	tags := tview.NewInputField()
@@ -281,18 +273,4 @@ func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, 
 	pages.AddPage(name, grid, true, true)
 
 	return name
-}
-
-func createAppInputHandler(stack *hndlstack.InputHandlerStack) hndlstack.InputHandler {
-	return func(event *tcell.EventKey) *tcell.EventKey {
-		result := event
-		for i := len(stack.InputHandler) - 1; i >= 0; i-- {
-			handler := stack.InputHandler[i]
-			res := handler(event)
-			if res == nil {
-				return nil
-			}
-		}
-		return result
-	}
 }

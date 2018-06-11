@@ -1,4 +1,4 @@
-package datatypes
+package main
 
 /*
 Use this sample for reference:
