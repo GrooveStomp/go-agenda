@@ -35,13 +35,6 @@ type Widget struct {
 	InputHandler hndlstack.InputHandler
 }
 
-type AgendaItem struct {
-	Title  string
-	Bodies []string // We can have N bodies separated by N-1 Links to other agenda items.
-	Links  []AgendaItem
-	Tags   []string
-}
-
 func createEscHandler(callback func()) hndlstack.InputHandler {
 	return func(eventKey *tcell.EventKey) *tcell.EventKey {
 		if eventKey.Key() == tcell.KeyEsc {
