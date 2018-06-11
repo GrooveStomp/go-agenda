@@ -1,4 +1,4 @@
-package main
+package datatypes
 
 /*
 Use this sample for reference:
@@ -41,28 +41,28 @@ type AgendaNode struct {
 	Tags     []string
 }
 
-func main() {
-	level0 := NewNode("level0", "text0 text0 text0 text0", []string{})
+// func main() {
+// 	level0 := NewNode("level0", "text0 text0 text0 text0", []string{})
 
-	level1 := NewNode("level1", "text1 text1 text1 text1", []string{})
-	level0.AddChild(level1)
+// 	level1 := NewNode("level1", "text1 text1 text1 text1", []string{})
+// 	level0.AddChild(level1)
 
-	level1b := NewNode("level1b", "text1b text1b text1b text1b", []string{})
-	level1.AddSibling(level1b)
+// 	level1b := NewNode("level1b", "text1b text1b text1b text1b", []string{})
+// 	level1.AddSibling(level1b)
 
-	level1c := NewNode("level1c", "text1c text1c text1c text1c", []string{})
-	level1.AddSibling(level1c)
+// 	level1c := NewNode("level1c", "text1c text1c text1c text1c", []string{})
+// 	level1.AddSibling(level1c)
 
-	level2 := NewNode("level2", "text2 text2 text2 text2", []string{})
-	level1.AddChild(level2)
+// 	level2 := NewNode("level2", "text2 text2 text2 text2", []string{})
+// 	level1.AddChild(level2)
 
-	print := func(node *AgendaNode, depth int) {
-		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
-		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
-	}
+// 	print := func(node *AgendaNode, depth int) {
+// 		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
+// 		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
+// 	}
 
-	level0.Walk(print)
-}
+// 	level0.Walk(print)
+// }
 
 func (node *AgendaNode) Display(level int) {
 	fmt.Println(node.Title)

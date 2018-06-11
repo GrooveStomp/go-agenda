@@ -27,6 +27,7 @@ import (
 	"github.com/rivo/tview"
 	"strings"
 
+	d "code.groovestomp.com/agenda/internal/datatypes"
 	"code.groovestomp.com/agenda/internal/hndlstack"
 )
 
@@ -41,14 +42,29 @@ func createEscHandler(callback func()) hndlstack.InputHandler {
 			callback()
 			// NOTE(AARONO): Apparently returning nil here causes laggy behavior where
 			// it seems like Esc needs to be hit twice.
+			return nil
 		}
-		return nil
+		return eventKey
 	}
 }
 
-var debugOut *tview.TextView
+var (
+	debugOut     *tview.TextView
+	boxShown     bool
+	helpShown    bool
+	currentPage  string
+	lastPage     string
+	addItemCount int
+)
 
 func main() {
+	boxShown = false
+	helpShown = false
+	currentPage = "main"
+	lastPage = "main"
+	addItemCount = 0
+	root := d.NewNode("", "", []string{})
+
 	mainGrid := tview.NewGrid()
 
 	debugOut = tview.NewTextView()
@@ -90,12 +106,6 @@ x        Mark an item as complete.
 	mainGrid.SetColumns(-1)
 	mainGrid.AddItem(pages, 0, 0, 1, 1, 1, 1, true)
 	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
-
-	boxShown := false
-	helpShown := false
-	currentPage := "main"
-	lastPage := "main"
-	addItemCount := 0
 
 	app := tview.NewApplication()
 	handlers := hndlstack.InputHandlerStack{}
@@ -166,9 +176,11 @@ x        Mark an item as complete.
 			debugOut.SetText("Showing Help")
 		} else if event.Rune() == '+' {
 			addItemCount += 1
-			name := addItemPage(pages, addItemCount)
+			// TODO: Return a new node agenda node.
+			name := addItemPage(app, &handlers, pages, addItemCount, root)
 			lastPage = currentPage
 			currentPage = name
+			pages.SwitchToPage(currentPage)
 			result = nil
 			debugOut.SetText(fmt.Sprintf("Showing %s", name))
 		}
@@ -188,37 +200,85 @@ x        Mark an item as complete.
 	}
 }
 
-func addItemPage(pages *tview.Pages, dialogNum int) string {
+func addItemPage(app *tview.Application, handlers *hndlstack.InputHandlerStack, pages *tview.Pages, dialogNum int, tree *d.AgendaNode) string {
 	/*
 		This should have its own input handler to:
 		- tab between elements.
 		- record data in a common datastructure.
 	*/
+	node := d.NewNode("", "", []string{})
 	name := fmt.Sprintf("addAgendaItem%v", dialogNum)
 
 	grid := tview.NewGrid()
+	title := tview.NewInputField()
+	body := tview.NewInputField()
+
 	grid.SetRows(3, -1, 3)
 	grid.SetColumns(-1)
 
-	title := tview.NewInputField()
+	handleEsc := createEscHandler(func() {
+		tree.AddChild(node)
+		currentPage = lastPage
+		lastPage = name
+		debugOut.SetText(fmt.Sprintf("Exiting %v", name))
+		pages.SwitchToPage(currentPage)
+		handlers.Pop()
+		app.Draw()
+	})
+
 	title.SetBorder(true)
 	title.SetTitle("List String")
+	title.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEnter:
+			node.Title = title.GetText()
+		case tcell.KeyTab:
+			app.SetFocus(body)
+		case tcell.KeyEsc:
+			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+		case tcell.KeyBacktab:
+			debugOut.SetText("<backtab>")
+		default:
+		}
+	})
+	title.SetChangedFunc(func(text string) {
+		debugOut.SetText(text)
+		app.Draw()
+	})
+	title.SetAcceptanceFunc(func(toCheck string, lastChar rune) bool {
+		return true
+	})
 
-	body := tview.NewInputField()
 	body.SetBorder(true)
 	body.SetTitle("Full Description")
+	body.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEnter:
+			node.Text = body.GetText()
+		case tcell.KeyTab:
+			app.SetFocus(body)
+		case tcell.KeyEsc:
+			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
+		case tcell.KeyBacktab:
+			debugOut.SetText("<backtab>")
+		default:
+		}
+	})
 
 	tags := tview.NewInputField()
 	tags.SetBorder(true)
 	tags.SetTitle("Tags")
 	tags.SetPlaceholder("tag1 tag-2 spaces_separate_tags")
+	tags.SetDoneFunc(func(tcell.Key) {
+		node.Tags = []string{tags.GetText()} // TODO(AARONO): Split text on spaces!
+	})
 
 	grid.AddItem(title, 0, 0, 1, 1, 1, 1, true)
 	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
 	grid.AddItem(tags, 2, 0, 1, 1, 1, 1, false)
 
-	pages.AddPage(name, grid, true, false)
-	pages.SwitchToPage(name)
+	handlers.Push(handleEsc)
+	pages.AddPage(name, grid, true, true)
 
 	return name
 }
