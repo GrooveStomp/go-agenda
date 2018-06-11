@@ -6,6 +6,7 @@ import (
 
 type Widget struct {
 	//Id WidgetId
-	Primitive    tview.Primitive
-	InputHandler InputHandler
+	Primitive         tview.Primitive
+	InputHandler      InputHandler
+	InputHandlerIndex int
 }

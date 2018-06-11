@@ -35,6 +35,7 @@ var (
 	currentPage  string
 	lastPage     string
 	addItemCount int
+	flexWidget   Widget
 )
 
 func main() {
@@ -88,7 +89,7 @@ x        Mark an item as complete.
 	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
 
 	app := tview.NewApplication()
-	handlers := InputHandlerStack{}
+	inputStack := InputHandlerStack{}
 
 	helpWidget := Widget{}
 	helpWidget.Primitive = help
@@ -98,7 +99,7 @@ x        Mark an item as complete.
 		helpShown = false
 		debugOut.SetText("Exiting Help")
 		pages.SwitchToPage(currentPage)
-		handlers.Pop()
+		inputStack.Pop()
 		app.Draw()
 	})
 
@@ -113,18 +114,18 @@ x        Mark an item as complete.
 		flex.RemoveItem(box)
 		boxShown = false
 		debugOut.SetText("Box Exited")
-		handlers.Pop()
+		inputStack.Pop()
 		app.Draw()
 	})
 
-	flexWidget := Widget{}
+	flexWidget = Widget{}
 	flexWidget.Primitive = flex
 	flexWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
 
 		if event.Key() == tcell.KeyRune && event.Rune() == 't' {
 			if !boxShown {
-				handlers.Push(boxWidget.InputHandler)
+				boxWidget.InputHandlerIndex = inputStack.Push(boxWidget.InputHandler)
 				flex.AddItem(box, 0, 1, true)
 				app.SetFocus(box)
 				boxShown = true
@@ -147,7 +148,7 @@ x        Mark an item as complete.
 		}
 
 		if event.Rune() == '?' && !helpShown {
-			handlers.Push(helpWidget.InputHandler)
+			helpWidget.InputHandlerIndex = inputStack.Push(helpWidget.InputHandler)
 			lastPage = currentPage
 			currentPage = "help"
 			pages.SwitchToPage(currentPage)
@@ -157,7 +158,7 @@ x        Mark an item as complete.
 		} else if event.Rune() == '+' {
 			addItemCount += 1
 			// TODO: Return a new node agenda node.
-			name := addItemPage(app, &handlers, pages, addItemCount, root)
+			name := addItemPage(app, &inputStack, pages, addItemCount, root)
 			lastPage = currentPage
 			currentPage = name
 			pages.SwitchToPage(currentPage)
@@ -170,11 +171,11 @@ x        Mark an item as complete.
 		return
 	}
 
-	handlers.Push(pagesWidget.InputHandler)
-	handlers.Push(flexWidget.InputHandler)
+	pagesWidget.InputHandlerIndex = inputStack.Push(pagesWidget.InputHandler)
+	flexWidget.InputHandlerIndex = inputStack.Push(flexWidget.InputHandler)
 
 	app.SetFocus(pages)
-	app.SetInputCapture(createAppInputHandler(&handlers))
+	app.SetInputCapture(createAppInputHandler(&inputStack))
 	if err := app.SetRoot(mainGrid, true).Run(); err != nil {
 		panic(err)
 	}
@@ -187,7 +188,7 @@ x        Mark an item as complete.
 	root.Walk(print)
 }
 
-func addItemPage(app *tview.Application, handlers *InputHandlerStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) string {
+func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) string {
 	/*
 		This should have its own input handler to:
 		- tab between elements.
@@ -200,30 +201,32 @@ func addItemPage(app *tview.Application, handlers *InputHandlerStack, pages *tvi
 	title := tview.NewInputField()
 	body := tview.NewInputField()
 
+	inputStack.Disable(flexWidget.InputHandlerIndex)
+
 	grid.SetRows(3, -1, 3)
 	grid.SetColumns(-1)
 
 	handleEsc := createEscHandler(func() {
+		inputStack.Enable(flexWidget.InputHandlerIndex)
 		tree.AddChild(node)
 		currentPage = lastPage
 		lastPage = name
 		debugOut.SetText(fmt.Sprintf("Exiting %v", name))
 		pages.SwitchToPage(currentPage)
-		handlers.Pop()
+		inputStack.Pop()
 		app.Draw()
 	})
 
 	title.SetBorder(true)
 	title.SetTitle("List String")
 	title.SetDoneFunc(func(key tcell.Key) {
+		node.Title = title.GetText()
 		switch key {
 		case tcell.KeyEnter:
-			node.Title = title.GetText()
 			app.SetFocus(body)
 		case tcell.KeyTab:
 			app.SetFocus(body)
 		case tcell.KeyEsc:
-			node.Title = title.GetText()
 			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyBacktab:
 			debugOut.SetText("<backtab>")
@@ -238,14 +241,13 @@ func addItemPage(app *tview.Application, handlers *InputHandlerStack, pages *tvi
 	body.SetBorder(true)
 	body.SetTitle("Full Description")
 	body.SetDoneFunc(func(key tcell.Key) {
+		node.Text = body.GetText()
 		switch key {
 		case tcell.KeyEnter:
-			node.Text = body.GetText()
 			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyTab:
 			debugOut.SetText("<tab>")
 		case tcell.KeyEsc:
-			node.Text = body.GetText()
 			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
 		case tcell.KeyBacktab:
 			app.SetFocus(title)
@@ -269,7 +271,7 @@ func addItemPage(app *tview.Application, handlers *InputHandlerStack, pages *tvi
 	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
 	grid.AddItem(tags, 2, 0, 1, 1, 1, 1, false)
 
-	handlers.Push(handleEsc)
+	inputStack.Push(handleEsc)
 	pages.AddPage(name, grid, true, true)
 
 	return name

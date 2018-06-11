@@ -8,10 +8,13 @@ type InputHandler func(*tcell.EventKey) *tcell.EventKey
 
 type InputHandlerStack struct {
 	InputHandler []InputHandler
+	Enabled      []bool
 }
 
-func (s *InputHandlerStack) Push(f InputHandler) {
+func (s *InputHandlerStack) Push(f InputHandler) int {
 	s.InputHandler = append(s.InputHandler, f)
+	s.Enabled = append(s.Enabled, true)
+	return len(s.InputHandler) - 1
 }
 
 func (s *InputHandlerStack) Pop() (handler InputHandler) {
@@ -23,6 +26,14 @@ func (s *InputHandlerStack) Pop() (handler InputHandler) {
 	s.InputHandler = s.InputHandler[:len(s.InputHandler)-1]
 
 	return handler
+}
+
+func (s *InputHandlerStack) Disable(idx int) {
+	s.Enabled[idx] = false
+}
+
+func (s *InputHandlerStack) Enable(idx int) {
+	s.Enabled[idx] = true
 }
 
 func (s *InputHandlerStack) Top() InputHandler {
@@ -52,6 +63,9 @@ func createAppInputHandler(stack *InputHandlerStack) InputHandler {
 		result := event
 		for i := len(stack.InputHandler) - 1; i >= 0; i-- {
 			handler := stack.InputHandler[i]
+			if !stack.Enabled[i] {
+				continue
+			}
 			res := handler(event)
 			if res == nil {
 				return nil
