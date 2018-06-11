@@ -1,34 +1,72 @@
 package main
 
+/*
+Use this sample for reference:
++-------------------------------------------------------------------------------
+|* Heading 1
+|  text 1-1
+|
+|  * Sub-Heading 1a
+|    text 1a-1
+|
+|    * Sub-Sub Heading 1aa
+|      text 1aa-1
+|
+|    text 1a-2
+|
+|  text 1-2
+|
+|  * Sub-Heading 1b
+|    text 1b-1
+|
+|  text 1-3
++-------------------------------------------------------------------------------
+
+text 1-1, text 1-2 and text 1-3 are all Siblings of each other.
+text 1-2 and text 1-3 should not have headings of their own.
+
+text 1a-1 and text 1b-1 are children of text 1-1 (but *not* 1-2 or 1-3)
+
+*/
+
 import (
-	 "fmt"
+	"fmt"
 )
 
 type AgendaNode struct {
-	Title string
-	Text string
-	Sibling *AgendaNode
-	Child *AgendaNode
-	Tags []string
+	Title    string
+	Text     string
+	Sibling  *AgendaNode
+	Children []*AgendaNode
+	Tags     []string
 }
 
 func main() {
-	root := NewNode("Root", "Root Text", []string{})
-	child1a := NewNode("Child1a", "Child1a Text", []string{})
-	root.AddChild(child1a)
-	child1b := NewNode("Child1b", "Child1b Text", []string{})
-	root.AddChild(child1b)
-	child2a := NewNode("Child2a", "Child2a Text", []string{})
-	child1a.AddChild(child2a)
+	level0 := NewNode("level0", "text0 text0 text0 text0", []string{})
 
-	print := func(node *AgendaNode)
+	level1 := NewNode("level1", "text1 text1 text1 text1", []string{})
+	level0.AddChild(level1)
 
-	WalkDepth()
+	level1b := NewNode("level1b", "text1b text1b text1b text1b", []string{})
+	level1.AddSibling(level1b)
+
+	level1c := NewNode("level1c", "text1c text1c text1c text1c", []string{})
+	level1.AddSibling(level1c)
+
+	level2 := NewNode("level2", "text2 text2 text2 text2", []string{})
+	level1.AddChild(level2)
+
+	print := func(node *AgendaNode, depth int) {
+		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
+		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
+	}
+
+	level0.Walk(print)
 }
 
 func (node *AgendaNode) Display(level int) {
 	fmt.Println(node.Title)
-	fmt.Println(> text)
+	fmt.Println("> text")
 }
 
 func NewNode(title, text string, tags []string) *AgendaNode {
@@ -37,62 +75,54 @@ func NewNode(title, text string, tags []string) *AgendaNode {
 }
 
 func (parent *AgendaNode) AddChild(node *AgendaNode) {
-	var sibling *AgendaNode
-	if parent.Child != nil {
-		sibling = parent.Child
-		sibling.AddSibling(node)
-	} else {
-		parent.Child = node
-	}
+	parent.Children = append(node.Children, node)
 }
 
 func (sibling *AgendaNode) AddSibling(node *AgendaNode) {
-	for ; sibling.Sibling != nil; sibling = sibling.Sibling {}
-	sibling.Sibling = node
-}
-
-// Traverses child nodes until nil is encountered. No siblings are touched.
-//
-func (node *AgendaNode) VisitDescendants(callback func(node *AgendaNode)) {
-	func walk := func(level int, node *AgendaNode, callback func(node *AgendaNode)) {
-		callback(node)
-		
-		if node.Child == nil {
-			return
-		}
-
-		walk(level + 1, node.Child, callback)
-		return
+	for ; sibling.Sibling != nil; sibling = sibling.Sibling {
 	}
-
-	walk(0, node, callback)
+	sibling.Sibling = node
 }
 
 // Traverses sibling nodes until nil is encountered. No children are touched.
 //
-func (tree *AgendaNode) VisitSiblings(callback func(node *AgendaNode)) {
-	func walk := func(node *AgendaNode, callback func(node *AgendaNode)) {
-		for ; node.Sibling != nil; node = node.Sibling {
-			callback(node)
-		}
+func (node *AgendaNode) VisitSiblings(siblingNum int, callback func(*AgendaNode, int)) {
+	for ; node.Sibling != nil; node = node.Sibling {
+		callback(node, siblingNum)
+		siblingNum++
 	}
-
-	walk(node, callback)
 }
 
-func (tree *AgendaNode) WalkDepth(callback func(level, *AgendaNode)) {
-	func walk := func(level int, tree *AgendaNode, callback func(level, *AgendaNode)) {
-		node := tree
+// Traverses child nodes until nil is encountered. No siblings are touched.
+//
+func (node *AgendaNode) VisitChildren(childNum int, callback func(*AgendaNode, int)) {
+	for i := range node.Children {
+		child := node.Children[i]
+		callback(child, i)
+	}
+}
 
-		depthLevel := level
-		for ; depthLevel++, node.Child != nil; node = node.Child {
-			callback(depthLevel, node)
+// Invoke callback on each node in the tree.
+// Walk performs a depth-first, sibling-second traversal of the tree.
+// @param callback
+//        Takes the node being visited and how many levels deep in the tree the node is.
+//
+func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
+	type cbfn func(*AgendaNode, int)
+	var walk func(*AgendaNode, int, cbfn)
+
+	walk = func(node *AgendaNode, depth int, callback cbfn) {
+		callback(node, depth)
+
+		for i := range node.Children {
+			child := node.Children[i]
+			walk(child, depth+1, callback)
 		}
 
 		for ; node.Sibling != nil; node = node.Sibling {
-			node.WalkDepth(level, callback)
+			walk(node.Sibling, depth, callback)
 		}
 	}
 
-	walk(0, tree, callback)
+	walk(node, 0, callback)
 }
