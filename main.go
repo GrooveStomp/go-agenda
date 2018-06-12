@@ -3,26 +3,22 @@ package main
 /*
 
 TODO:
-- Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
+- Allow editing an agenda item
+  ✓> <enter> on the item: brings up an edit dialog prepopulated with text.
+  ✓> <enter> in the dialog: returns to main view, list item is updated.
+- Allow moving an item up and down in the list.
+- Allow adding a child item.
+- Allow indenting/de-indenting an item.
+- Allow nesting agendas and fluidly adding siblings and whatnot.
+  > Ah crap.  That means the text from the pop-up can't just be taken "as-is"
+- Modularize everything!  Ha ha.
+  > Separation of concerns, that kind of things.  UI and BE are intermixed pretty liberally.
 - Prototype and experiment with fluidity and mechanics of building nestable, hierarchical lists in the UI.
-
-Org-Mode is a hierarchical outline.
-It consists of headlines and collapsing portions of the document.
-
-When I use org-mode, there are a few specific features I make use of:
-- title
-- tags
-- description
-
-Part of what makes org-mode good to use is that you can quickly and arbitrarily
-define nested sections.  Adding a new nested section should be quick and
-painless, and moving sections around (indenting, outdenting, removing as a
-headline (collapsing to parent's level) should also feel natural.
+- Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
 
 */
 
 import (
-	"fmt"
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"os"
@@ -30,32 +26,29 @@ import (
 )
 
 var (
-	debugOut     *tview.TextView
-	boxShown     bool
-	addItemCount int
-	flexWidget   Widget
+	log      DebugLog
+	boxShown bool
 )
 
 func main() {
+	var editNode func(*AgendaNode, func(*AgendaNode))
+	var editNodeCallback func(*AgendaNode)
 	boxShown = false
-	addItemCount = 0
 	rootAgendaNode := NewNode("", "", []string{})
 
 	mainGrid := tview.NewGrid()
 
-	debugOut = tview.NewTextView()
-	debugOut.SetTitle("Debug Output")
-	debugOut.SetBorder(true)
-	debugOut.SetText("Hello Daniela")
+	log.Primitive = tview.NewTextView()
+	log.Primitive.SetBorder(true)
+	log.Log("Program loaded")
 
 	list := tview.NewList()
 	list.SetBorder(true)
 	list.SetTitle("Agenda")
-	list.AddItem("Example 1", "Description 1", 0, nil)
-	list.AddItem("Example 2", "Description 2", 0, nil)
-	list.AddItem("Example 3", "Description 3", 0, nil)
-	list.AddItem("Example 4", "Description 4", 0, nil)
-	list.AddItem("Example 5", "Description 5", 0, nil)
+	list.SetSelectedFunc(func(index int, title string, boody string, _ rune) {
+		node := rootAgendaNode.Children[index]
+		editNode(node, editNodeCallback)
+	})
 
 	flex := tview.NewFlex()
 	flex.SetFullScreen(false)
@@ -86,7 +79,7 @@ x        Mark an item as complete.
 	mainGrid.SetRows(-1, 3)
 	mainGrid.SetColumns(-1)
 	mainGrid.AddItem(pages, 0, 0, 1, 1, 1, 1, true)
-	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
+	mainGrid.AddItem(log.Primitive, 1, 0, 1, 1, 1, 1, false)
 
 	helpWidget := Widget{}
 	helpWidget.Primitive = help
@@ -94,7 +87,7 @@ x        Mark an item as complete.
 		inputStack.Pop()
 		pageStack.Pop()
 		pages.SwitchToPage(pageStack.Top().Name)
-		debugOut.SetText(fmt.Sprintf("Exiting help, switching to %v", pageStack.Top().Name))
+		log.Log("Exiting help, switching to %v", pageStack.Top().Name)
 		app.Draw()
 	})
 
@@ -107,12 +100,12 @@ x        Mark an item as complete.
 	boxWidget.InputHandler = createEscHandler(func() {
 		inputStack.Pop()
 		boxShown = false
-		debugOut.SetText("Exiting Box, switching to main")
+		log.Log("Exiting box, switching to main")
 		flex.RemoveItem(box)
 		app.Draw()
 	})
 
-	flexWidget = Widget{}
+	flexWidget := Widget{}
 	flexWidget.Primitive = flex
 	flexWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
@@ -123,7 +116,7 @@ x        Mark an item as complete.
 				flex.AddItem(box, 0, 1, true)
 				app.SetFocus(box)
 				boxShown = true
-				debugOut.SetText("Showing Box")
+				log.Log("Showing box")
 				result = nil
 			}
 
@@ -131,6 +124,35 @@ x        Mark an item as complete.
 		}
 
 		return
+	}
+
+	addNodeCallback := func(node *AgendaNode) {
+		list.AddItem(node.Title, node.Text, 0, nil)
+	}
+
+	editNodeCallback = func(node *AgendaNode) {
+		index := list.GetCurrentItem()
+		list.SetItemText(index, node.Title, node.Text)
+	}
+
+	editNode = func(node *AgendaNode, callback func(node *AgendaNode)) {
+		editNodeWidget := NewEditAgendaNodeWidget(app, node)
+		editNodeWidget.InputHandler = createEscHandler(func() {
+			inputStack.Enable(flexWidget.InputHandlerIndex)
+			rootAgendaNode.AddChild(node)
+			inputStack.Pop()
+			pageStack.Pop()
+			pages.SwitchToPage(pageStack.Top().Name)
+			log.Log("Exiting %v, switching to %v", editNodeWidget.Name, pageStack.Top().Name)
+			callback(node)
+			app.Draw()
+		})
+		editNodeWidget.InputHandlerIndex = inputStack.Push(editNodeWidget.InputHandler)
+		inputStack.Disable(flexWidget.InputHandlerIndex)
+		pages.AddPage(editNodeWidget.Name, editNodeWidget.Primitive, true, true)
+		pageStack.Push(&Page{Name: editNodeWidget.Name, Primitive: editNodeWidget.Primitive})
+		pages.SwitchToPage(editNodeWidget.Name)
+		log.Log("Showing %s", editNodeWidget.Name)
 	}
 
 	pagesWidget := Widget{}
@@ -150,16 +172,12 @@ x        Mark an item as complete.
 			helpWidget.InputHandlerIndex = inputStack.Push(helpWidget.InputHandler)
 			pageStack.Push(&Page{Name: "help", Primitive: helpWidget.Primitive})
 			pages.SwitchToPage("help")
-			debugOut.SetText("Showing Help")
+			log.Log("Showing help")
 			result = nil
 
 		case '+':
-			addItemCount += 1
-			name, primitive, inputHandler := addItemPage(app, &inputStack, &pageStack, pages, addItemCount, rootAgendaNode)
-			inputStack.Push(inputHandler)
-			pageStack.Push(&Page{Name: name, Primitive: primitive})
-			pages.SwitchToPage(name)
-			debugOut.SetText(fmt.Sprintf("Showing %s", name))
+			node := &AgendaNode{}
+			editNode(node, addNodeCallback)
 			result = nil
 		}
 
@@ -180,91 +198,4 @@ x        Mark an item as complete.
 	rootAgendaNode.Walk(func(node *AgendaNode, indentLevel int) {
 		node.Print(os.Stdout, indentLevel, 5)
 	})
-}
-
-func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pageStack *PageStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) (string, tview.Primitive, InputHandler) {
-	/*
-		This should have its own input handler to:
-		- tab between elements.
-		- record data in a common datastructure.
-	*/
-	node := NewNode("", "", []string{})
-	name := fmt.Sprintf("addAgendaItem%v", dialogNum)
-
-	grid := tview.NewGrid()
-	title := tview.NewInputField()
-	body := tview.NewInputField()
-
-	inputStack.Disable(flexWidget.InputHandlerIndex)
-
-	grid.SetRows(3, -1, 3)
-	grid.SetColumns(-1)
-
-	handleEsc := createEscHandler(func() {
-		inputStack.Enable(flexWidget.InputHandlerIndex)
-		tree.AddChild(node)
-		inputStack.Pop()
-		pageStack.Pop()
-		pages.SwitchToPage(pageStack.Top().Name)
-		debugOut.SetText(fmt.Sprintf("Exiting %v, switching to %v", name, pageStack.Top().Name))
-		app.Draw()
-	})
-
-	title.SetBorder(true)
-	title.SetTitle("List String")
-	title.SetDoneFunc(func(key tcell.Key) {
-		node.Title = title.GetText()
-		switch key {
-		case tcell.KeyEnter:
-			app.SetFocus(body)
-		case tcell.KeyTab:
-			app.SetFocus(body)
-		case tcell.KeyEsc:
-			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
-		case tcell.KeyBacktab:
-			debugOut.SetText("<backtab>")
-		default:
-		}
-	})
-	title.SetChangedFunc(func(text string) {
-		debugOut.SetText(text)
-		app.Draw()
-	})
-
-	body.SetBorder(true)
-	body.SetTitle("Full Description")
-	body.SetDoneFunc(func(key tcell.Key) {
-		node.Text = body.GetText()
-		switch key {
-		case tcell.KeyEnter:
-			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
-		case tcell.KeyTab:
-			debugOut.SetText("<tab>")
-		case tcell.KeyEsc:
-			handleEsc(tcell.NewEventKey(tcell.KeyEsc, 0, tcell.ModNone))
-		case tcell.KeyBacktab:
-			app.SetFocus(title)
-		default:
-		}
-	})
-	body.SetChangedFunc(func(text string) {
-		debugOut.SetText(text)
-		app.Draw()
-	})
-
-	tags := tview.NewInputField()
-	tags.SetBorder(true)
-	tags.SetTitle("Tags")
-	tags.SetPlaceholder("tag1 tag-2 spaces_separate_tags")
-	tags.SetDoneFunc(func(tcell.Key) {
-		node.Tags = []string{tags.GetText()} // TODO(AARONO): Split text on spaces!
-	})
-
-	grid.AddItem(title, 0, 0, 1, 1, 1, 1, true)
-	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
-	grid.AddItem(tags, 2, 0, 1, 1, 1, 1, false)
-
-	pages.AddPage(name, grid, true, true)
-
-	return name, grid, handleEsc
 }
