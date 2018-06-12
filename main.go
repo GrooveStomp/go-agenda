@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
+	"os"
 	"strings"
 )
 
@@ -38,7 +39,7 @@ var (
 func main() {
 	boxShown = false
 	addItemCount = 0
-	root := NewNode("", "", []string{})
+	rootAgendaNode := NewNode("", "", []string{})
 
 	mainGrid := tview.NewGrid()
 
@@ -104,11 +105,10 @@ x        Mark an item as complete.
 	boxWidget := Widget{}
 	boxWidget.Primitive = box
 	boxWidget.InputHandler = createEscHandler(func() {
-		debugOut.SetText("Exiting Box")
-		flex.RemoveItem(box)
-		boxShown = false
-		debugOut.SetText("Box Exited")
 		inputStack.Pop()
+		boxShown = false
+		debugOut.SetText("Exiting Box, switching to main")
+		flex.RemoveItem(box)
 		app.Draw()
 	})
 
@@ -155,7 +155,7 @@ x        Mark an item as complete.
 
 		case '+':
 			addItemCount += 1
-			name, primitive, inputHandler := addItemPage(app, &inputStack, &pageStack, pages, addItemCount, root)
+			name, primitive, inputHandler := addItemPage(app, &inputStack, &pageStack, pages, addItemCount, rootAgendaNode)
 			inputStack.Push(inputHandler)
 			pageStack.Push(&Page{Name: name, Primitive: primitive})
 			pages.SwitchToPage(name)
@@ -177,12 +177,9 @@ x        Mark an item as complete.
 		panic(err)
 	}
 
-	print := func(node *AgendaNode, depth int) {
-		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
-		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
-	}
-
-	root.Walk(print)
+	rootAgendaNode.Walk(func(node *AgendaNode, indentLevel int) {
+		node.Print(os.Stdout, indentLevel, 5)
+	})
 }
 
 func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pageStack *PageStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) (string, tview.Primitive, InputHandler) {
@@ -209,7 +206,7 @@ func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pageStac
 		inputStack.Pop()
 		pageStack.Pop()
 		pages.SwitchToPage(pageStack.Top().Name)
-		debugOut.SetText(fmt.Sprintf("Exited %v, switched to %v", name, pageStack.Top().Name))
+		debugOut.SetText(fmt.Sprintf("Exiting %v, switching to %v", name, pageStack.Top().Name))
 		app.Draw()
 	})
 

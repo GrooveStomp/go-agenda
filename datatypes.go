@@ -31,6 +31,7 @@ text 1a-1 and text 1b-1 are children of text 1-1 (but *not* 1-2 or 1-3)
 
 import (
 	"fmt"
+	"io"
 )
 
 type AgendaNode struct {
@@ -42,31 +43,31 @@ type AgendaNode struct {
 }
 
 // func main() {
-// 	level0 := NewNode("level0", "text0 text0 text0 text0", []string{})
+//   tree := NewNode("tree", "text0 text0 text0 text0", []string{})
 
-// 	level1 := NewNode("level1", "text1 text1 text1 text1", []string{})
-// 	level0.AddChild(level1)
+//   treec1 := NewNode("treec1", "text1 text1 text1 text1", []string{})
+//   tree.AddChild(treec1)
 
-// 	level1b := NewNode("level1b", "text1b text1b text1b text1b", []string{})
-// 	level1.AddSibling(level1b)
+//   treec1s1 := NewNode("treec1s1", "text1b text1b text1b text1b", []string{})
+//   treec1.AddSibling(treec1s1)
 
-// 	level1c := NewNode("level1c", "text1c text1c text1c text1c", []string{})
-// 	level1.AddSibling(level1c)
+//   treec1s1c1 := NewNode("treec1s1c1", "text text text text", []string{})
+//   treec1s1.AddChild(treec1s1c1)
 
-// 	level2 := NewNode("level2", "text2 text2 text2 text2", []string{})
-// 	level1.AddChild(level2)
+//   treec1s2 := NewNode("treec1s2", "text1c text1c text1c text1c", []string{})
+//   treec1s1.AddSibling(treec1s2)
 
-// 	print := func(node *AgendaNode, depth int) {
-// 		fmt.Printf("%*s%v\n", depth*5, " ", node.Title)
-// 		fmt.Printf("%*s%v\n", depth*5, " ", node.Text)
-// 	}
+//   treec2 := NewNode("treec2", "text2 text2 text2 text2", []string{})
+//   tree.AddChild(treec2)
 
-// 	level0.Walk(print)
+//   tree.Walk(func(node *AgendaNode, indentLevel int) {
+//     node.Print(os.Stdout, indentLevel, 5)
+//   })
 // }
 
-func (node *AgendaNode) Display(level int) {
-	fmt.Println(node.Title)
-	fmt.Println("> text")
+func (node *AgendaNode) Print(w io.Writer, indentLevel int, indentScale int) {
+	io.WriteString(w, fmt.Sprintf("%*s%v\n", indentLevel*indentScale, " ", node.Title))
+	io.WriteString(w, fmt.Sprintf("%*s%v\n", indentLevel*indentScale, " ", node.Text))
 }
 
 func NewNode(title, text string, tags []string) *AgendaNode {
@@ -75,13 +76,13 @@ func NewNode(title, text string, tags []string) *AgendaNode {
 }
 
 func (parent *AgendaNode) AddChild(node *AgendaNode) {
-	parent.Children = append(node.Children, node)
+	parent.Children = append(parent.Children, node)
 }
 
-func (sibling *AgendaNode) AddSibling(node *AgendaNode) {
-	for ; sibling.Sibling != nil; sibling = sibling.Sibling {
+func (node *AgendaNode) AddSibling(new *AgendaNode) {
+	for ; node.Sibling != nil; node = node.Sibling {
 	}
-	sibling.Sibling = node
+	node.Sibling = new
 }
 
 // Traverses sibling nodes until nil is encountered. No children are touched.
