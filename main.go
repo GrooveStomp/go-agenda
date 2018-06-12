@@ -31,18 +31,12 @@ import (
 var (
 	debugOut     *tview.TextView
 	boxShown     bool
-	helpShown    bool
-	currentPage  string
-	lastPage     string
 	addItemCount int
 	flexWidget   Widget
 )
 
 func main() {
 	boxShown = false
-	helpShown = false
-	currentPage = "main"
-	lastPage = "main"
 	addItemCount = 0
 	root := NewNode("", "", []string{})
 
@@ -79,27 +73,27 @@ x        Mark an item as complete.
 <esc>    Quit any popups, dialogs or modals.
 `))
 
+	app := tview.NewApplication()
+	inputStack := InputHandlerStack{}
+	pageStack := PageStack{}
+
 	pages := tview.NewPages()
 	pages.AddPage("main", flex, true, true)
 	pages.AddPage("help", help, true, false)
+	pageStack.Push(&Page{Name: "main", Primitive: flex})
 
 	mainGrid.SetRows(-1, 3)
 	mainGrid.SetColumns(-1)
 	mainGrid.AddItem(pages, 0, 0, 1, 1, 1, 1, true)
 	mainGrid.AddItem(debugOut, 1, 0, 1, 1, 1, 1, false)
 
-	app := tview.NewApplication()
-	inputStack := InputHandlerStack{}
-
 	helpWidget := Widget{}
 	helpWidget.Primitive = help
 	helpWidget.InputHandler = createEscHandler(func() {
-		currentPage = lastPage
-		lastPage = "help"
-		helpShown = false
-		debugOut.SetText("Exiting Help")
-		pages.SwitchToPage(currentPage)
 		inputStack.Pop()
+		pageStack.Pop()
+		pages.SwitchToPage(pageStack.Top().Name)
+		debugOut.SetText(fmt.Sprintf("Exiting help, switching to %v", pageStack.Top().Name))
 		app.Draw()
 	})
 
@@ -147,23 +141,26 @@ x        Mark an item as complete.
 			return
 		}
 
-		if event.Rune() == '?' && !helpShown {
+		switch event.Rune() {
+		case '?':
+			if pageStack.Top().Name == "help" {
+				break
+			}
+
 			helpWidget.InputHandlerIndex = inputStack.Push(helpWidget.InputHandler)
-			lastPage = currentPage
-			currentPage = "help"
-			pages.SwitchToPage(currentPage)
-			helpShown = true
-			result = nil
+			pageStack.Push(&Page{Name: "help", Primitive: helpWidget.Primitive})
+			pages.SwitchToPage("help")
 			debugOut.SetText("Showing Help")
-		} else if event.Rune() == '+' {
-			addItemCount += 1
-			// TODO: Return a new node agenda node.
-			name := addItemPage(app, &inputStack, pages, addItemCount, root)
-			lastPage = currentPage
-			currentPage = name
-			pages.SwitchToPage(currentPage)
 			result = nil
+
+		case '+':
+			addItemCount += 1
+			name, primitive, inputHandler := addItemPage(app, &inputStack, &pageStack, pages, addItemCount, root)
+			inputStack.Push(inputHandler)
+			pageStack.Push(&Page{Name: name, Primitive: primitive})
+			pages.SwitchToPage(name)
 			debugOut.SetText(fmt.Sprintf("Showing %s", name))
+			result = nil
 		}
 
 		app.Draw()
@@ -188,7 +185,7 @@ x        Mark an item as complete.
 	root.Walk(print)
 }
 
-func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) string {
+func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pageStack *PageStack, pages *tview.Pages, dialogNum int, tree *AgendaNode) (string, tview.Primitive, InputHandler) {
 	/*
 		This should have its own input handler to:
 		- tab between elements.
@@ -209,11 +206,10 @@ func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pages *t
 	handleEsc := createEscHandler(func() {
 		inputStack.Enable(flexWidget.InputHandlerIndex)
 		tree.AddChild(node)
-		currentPage = lastPage
-		lastPage = name
-		debugOut.SetText(fmt.Sprintf("Exiting %v", name))
-		pages.SwitchToPage(currentPage)
 		inputStack.Pop()
+		pageStack.Pop()
+		pages.SwitchToPage(pageStack.Top().Name)
+		debugOut.SetText(fmt.Sprintf("Exited %v, switched to %v", name, pageStack.Top().Name))
 		app.Draw()
 	})
 
@@ -271,8 +267,7 @@ func addItemPage(app *tview.Application, inputStack *InputHandlerStack, pages *t
 	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
 	grid.AddItem(tags, 2, 0, 1, 1, 1, 1, false)
 
-	inputStack.Push(handleEsc)
 	pages.AddPage(name, grid, true, true)
 
-	return name
+	return name, grid, handleEsc
 }
