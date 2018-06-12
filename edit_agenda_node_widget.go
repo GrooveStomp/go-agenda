@@ -7,17 +7,22 @@ import (
 )
 
 var (
-	NodeNum = 0
+	EditAgendaNodeDialogNum = 1
 )
 
-func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode) (widget *Widget) {
+func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode, scratch *AgendaNode) (widget *Widget) {
 	widget = &Widget{}
 
 	title := tview.NewInputField()
 	body := tview.NewInputField()
 
+	titleText := "Title"
+	if scratch != nil {
+		titleText = fmt.Sprintf("Title (child of %v):", scratch.Title)
+	}
+
 	title.SetBorder(true)
-	title.SetTitle("Title")
+	title.SetTitle(titleText)
 	title.SetDoneFunc(func(key tcell.Key) {
 		node.Title = title.GetText()
 		switch key {
@@ -36,6 +41,7 @@ func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode) (widget *
 		}
 	})
 	title.SetChangedFunc(func(text string) {
+		node.Title = title.GetText()
 		log.Log(text)
 		app.Draw()
 	})
@@ -60,6 +66,7 @@ func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode) (widget *
 		}
 	})
 	body.SetChangedFunc(func(text string) {
+		node.Text = body.GetText()
 		log.Log(text)
 		app.Draw()
 	})
@@ -72,7 +79,7 @@ func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode) (widget *
 	grid.AddItem(body, 1, 0, 1, 1, 1, 1, false)
 
 	widget.Primitive = grid
-	widget.Name = fmt.Sprintf("node%v", NodeNum)
-	NodeNum++
+	widget.Name = fmt.Sprintf("EditAgenda%v", EditAgendaNodeDialogNum)
+	EditAgendaNodeDialogNum++
 	return
 }

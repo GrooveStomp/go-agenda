@@ -6,9 +6,9 @@ TODO:
 [ ] Allow editing an agenda item
   [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
   [✓] <enter> in the dialog: returns to main view, list item is updated.
-
+[ ] Properly draw nested lists
 [✓] Allow moving an item up and down in the list.
-[ ] Allow adding a child item.
+[✓] Allow adding a child item.
 [ ] Allow indenting/de-indenting an item.
 [ ] Allow nesting agendas and fluidly adding siblings and whatnot.
   [ ] Ah crap.  That means the text from the pop-up can't just be taken "as-is"
@@ -32,8 +32,10 @@ var (
 )
 
 func main() {
-	var editNode func(*AgendaNode, func(*AgendaNode))
+	var editNode func(*AgendaNode, *AgendaNode, func(*AgendaNode))
 	var editNodeCallback func(*AgendaNode)
+
+	newNodeStack := Stack{}
 	boxShown = false
 	rootAgendaNode := NewNode("", "", []string{})
 
@@ -46,9 +48,9 @@ func main() {
 	list := tview.NewList()
 	list.SetBorder(true)
 	list.SetTitle("Agenda")
-	list.SetSelectedFunc(func(index int, title string, boody string, _ rune) {
+	list.SetSelectedFunc(func(index int, title string, body string, _ rune) {
 		node := rootAgendaNode.Children[index]
-		editNode(node, editNodeCallback)
+		editNode(nil, node, editNodeCallback)
 	})
 
 	flex := tview.NewFlex()
@@ -129,13 +131,20 @@ func main() {
 		list.SetItemText(index, node.Title, node.Text)
 	}
 
-	editNode = func(node *AgendaNode, callback func(node *AgendaNode)) {
-		editNodeWidget := NewEditAgendaNodeWidget(app, node)
+	editNode = func(scratch *AgendaNode, node *AgendaNode, callback func(node *AgendaNode)) {
+		editNodeWidget := NewEditAgendaNodeWidget(app, node, scratch)
 		editNodeWidget.InputHandler = createEscHandler(func() {
-			inputStack.Enable(flexWidget.InputHandlerIndex)
-			rootAgendaNode.AddChild(node)
+			if newNodeStack.Count() <= 1 {
+				inputStack.Enable(flexWidget.InputHandlerIndex)
+			}
+			if scratch != nil {
+				scratch.AddChild(node)
+			} else {
+				rootAgendaNode.AddChild(node)
+			}
 			inputStack.Pop()
 			pageStack.Pop()
+			newNodeStack.Pop()
 			pages.SwitchToPage(pageStack.Top().Name)
 			log.Log("Exiting %v, switching to %v", editNodeWidget.Name, pageStack.Top().Name)
 			callback(node)
@@ -143,8 +152,8 @@ func main() {
 		})
 		editNodeWidget.InputHandlerIndex = inputStack.Push(editNodeWidget.InputHandler)
 		inputStack.Disable(flexWidget.InputHandlerIndex)
-		pages.AddPage(editNodeWidget.Name, editNodeWidget.Primitive, true, true)
 		pageStack.Push(&Page{Name: editNodeWidget.Name, Primitive: editNodeWidget.Primitive})
+		pages.AddPage(editNodeWidget.Name, editNodeWidget.Primitive, true, true)
 		pages.SwitchToPage(editNodeWidget.Name)
 		log.Log("Showing %s", editNodeWidget.Name)
 	}
@@ -209,8 +218,13 @@ func main() {
 				result = nil
 
 			case '+':
+				var scratchNode *AgendaNode = nil
+				if newNodeStack.Top() != nil {
+					scratchNode = newNodeStack.Top().(*AgendaNode)
+				}
 				node := &AgendaNode{}
-				editNode(node, addNodeCallback)
+				newNodeStack.Push(node)
+				editNode(scratchNode, node, addNodeCallback)
 				result = nil
 			}
 		}

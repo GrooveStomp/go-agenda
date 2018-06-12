@@ -140,7 +140,7 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 	walk(node, 0, callback)
 }
 
-// TODO(AARONO): Move a node "down".
+// Move a node "down".
 //   If there are other children:
 //     Shuffle the organization so this child gets a higher index .
 //   Otherwise:
@@ -177,7 +177,7 @@ func (node *AgendaNode) ShuffleDown() {
 	}
 }
 
-// TODO(AARONO): Move a node "up".
+// Move a node "up".
 //   If there are other children:
 //     Shuffle the organization so this child gets a lower index.
 //   Otherwise:
