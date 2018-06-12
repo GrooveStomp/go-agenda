@@ -3,18 +3,19 @@ package main
 /*
 
 TODO:
-- Allow editing an agenda item
-  ✓> <enter> on the item: brings up an edit dialog prepopulated with text.
-  ✓> <enter> in the dialog: returns to main view, list item is updated.
-- Allow moving an item up and down in the list.
-- Allow adding a child item.
-- Allow indenting/de-indenting an item.
-- Allow nesting agendas and fluidly adding siblings and whatnot.
-  > Ah crap.  That means the text from the pop-up can't just be taken "as-is"
-- Modularize everything!  Ha ha.
-  > Separation of concerns, that kind of things.  UI and BE are intermixed pretty liberally.
-- Prototype and experiment with fluidity and mechanics of building nestable, hierarchical lists in the UI.
-- Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
+[ ] Allow editing an agenda item
+  [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
+  [✓] <enter> in the dialog: returns to main view, list item is updated.
+
+[✓] Allow moving an item up and down in the list.
+[ ] Allow adding a child item.
+[ ] Allow indenting/de-indenting an item.
+[ ] Allow nesting agendas and fluidly adding siblings and whatnot.
+  [ ] Ah crap.  That means the text from the pop-up can't just be taken "as-is"
+[ ] Modularize everything!  Ha ha.
+  [ ] Separation of concerns, that kind of things.  UI and BE are intermixed pretty liberally.
+[ ] Prototype and experiment with fluidity and mechanics of building nestable, hierarchical lists in the UI.
+[ ] Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
 
 */
 
@@ -58,14 +59,7 @@ func main() {
 	help := tview.NewTextView()
 	help.SetBorder(true)
 	help.SetTitle("help")
-	help.SetText(strings.TrimSpace(`
-?        Show this help text.
-+        Add a new item.
-x        Mark an item as complete.
-<tab>    Expand an item.
-<ctrl+c> Quit
-<esc>    Quit any popups, dialogs or modals.
-`))
+	help.SetText(strings.TrimSpace(helpText))
 
 	app := tview.NewApplication()
 	inputStack := InputHandlerStack{}
@@ -159,28 +153,67 @@ x        Mark an item as complete.
 	pagesWidget.Primitive = pages
 	pagesWidget.InputHandler = func(event *tcell.EventKey) (result *tcell.EventKey) {
 		result = event
-		if event.Key() != tcell.KeyRune {
-			return
-		}
 
-		switch event.Rune() {
-		case '?':
-			if pageStack.Top().Name == "help" {
-				break
+		switch event.Key() {
+		case tcell.KeyPgUp:
+			log.Log("<pgup>")
+
+			// get index of currently selected item.
+			index := list.GetCurrentItem()
+			if index == 0 {
+				return nil
 			}
+			log.Log("index: %v, num items: %v", index, list.GetItemCount())
 
-			helpWidget.InputHandlerIndex = inputStack.Push(helpWidget.InputHandler)
-			pageStack.Push(&Page{Name: "help", Primitive: helpWidget.Primitive})
-			pages.SwitchToPage("help")
-			log.Log("Showing help")
+			node := rootAgendaNode.Children[index]
+			prevNode := rootAgendaNode.Children[index-1]
+
+			list.SetItemText(index-1, node.Title, node.Text)
+			list.SetItemText(index, prevNode.Title, prevNode.Text)
+			list.SetCurrentItem(index - 1)
+			node.ShuffleUp()
+
 			result = nil
 
-		case '+':
-			node := &AgendaNode{}
-			editNode(node, addNodeCallback)
+		case tcell.KeyPgDn:
+			log.Log("<pgdn>")
+
+			// get index of currently selected item.
+			index := list.GetCurrentItem()
+			if list.GetItemCount() == index+1 {
+				return nil
+			}
+			log.Log("index: %v, num items: %v", index, list.GetItemCount())
+
+			node := rootAgendaNode.Children[index]
+			nextNode := rootAgendaNode.Children[index+1]
+
+			list.SetItemText(index+1, node.Title, node.Text)
+			list.SetItemText(index, nextNode.Title, nextNode.Text)
+			list.SetCurrentItem(index + 1)
+			node.ShuffleDown()
+
 			result = nil
+
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case '?':
+				if pageStack.Top().Name == "help" {
+					break
+				}
+
+				helpWidget.InputHandlerIndex = inputStack.Push(helpWidget.InputHandler)
+				pageStack.Push(&Page{Name: "help", Primitive: helpWidget.Primitive})
+				pages.SwitchToPage("help")
+				log.Log("Showing help")
+				result = nil
+
+			case '+':
+				node := &AgendaNode{}
+				editNode(node, addNodeCallback)
+				result = nil
+			}
 		}
-
 		app.Draw()
 
 		return
@@ -199,3 +232,14 @@ x        Mark an item as complete.
 		node.Print(os.Stdout, indentLevel, 5)
 	})
 }
+
+var helpText = `
+?           Show this help text.
++           Add a new item.
+<tab>       Expand an item.
+<ctrl+c>    Quit
+<esc>       Quit any popups, dialogs or modals.
+<enter>     Edit selected item.
+<ctrl+up>   Move an item up in the list. (Preserves nesting level.)
+<ctrl+down> Move an item down in the list. (Preserves nesting level.)
+`

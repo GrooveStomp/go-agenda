@@ -35,6 +35,7 @@ import (
 )
 
 type AgendaNode struct {
+	Parent   *AgendaNode
 	Title    string
 	Text     string
 	Sibling  *AgendaNode
@@ -77,12 +78,23 @@ func NewNode(title, text string, tags []string) *AgendaNode {
 
 func (parent *AgendaNode) AddChild(node *AgendaNode) {
 	parent.Children = append(parent.Children, node)
+	node.Parent = parent
 }
 
 func (node *AgendaNode) AddSibling(new *AgendaNode) {
 	for ; node.Sibling != nil; node = node.Sibling {
 	}
 	node.Sibling = new
+	new.Parent = node.Parent
+}
+
+func (parent *AgendaNode) Index(child *AgendaNode) int {
+	for i := range parent.Children {
+		if parent.Children[i] == child {
+			return i
+		}
+	}
+	return -1
 }
 
 // Traverses sibling nodes until nil is encountered. No children are touched.
@@ -126,4 +138,78 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 	}
 
 	walk(node, 0, callback)
+}
+
+// TODO(AARONO): Move a node "down".
+//   If there are other children:
+//     Shuffle the organization so this child gets a higher index .
+//   Otherwise:
+//     If the parent has a parent and that parent has a higher-index child:
+//       Move to parent-parent's next highest index child's children's list at the start.
+//     Otherwise:
+//       Stop. Do nothing.
+//
+func (node *AgendaNode) ShuffleDown() {
+	parent := node.Parent
+	index := parent.Index(node)
+	if index == -1 {
+		panic(fmt.Errorf("Couldn't find node in children!"))
+	}
+
+	if index == len(parent.Children)-1 {
+		// Shuffle to next parent.
+		if parent.Parent == nil {
+			// There is no "super" parent, the parent is the root node.
+			return
+		}
+		parentIndex := parent.Parent.Index(parent)
+		if len(parent.Parent.Children) <= parentIndex+1 {
+			// There are no more children to pass ownership to!
+			return
+		}
+		// Change ownership to next parent and remove ownership from previous parent.
+		newParent := parent.Parent.Children[parentIndex+1]
+		newParent.Children = append(newParent.Children, node)
+		parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
+	} else {
+		// Shuffle index up within children.
+		parent.Children[index], parent.Children[index+1] = parent.Children[index+1], parent.Children[index]
+	}
+}
+
+// TODO(AARONO): Move a node "up".
+//   If there are other children:
+//     Shuffle the organization so this child gets a lower index.
+//   Otherwise:
+//     If the parent has a parent and that parent has a lower-index child:
+//       Move to parent-parent's next lowest index child's children's list at the end.
+//     Otherwise:
+//       Stop. Do nothing.
+//
+func (node *AgendaNode) ShuffleUp() {
+	parent := node.Parent
+	index := parent.Index(node)
+	if index == -1 {
+		panic(fmt.Errorf("Couldn't find node in children!"))
+	}
+
+	if len(parent.Children) == 1 {
+		// Shuffle to previous parent.
+		if parent.Parent == nil {
+			// There is no "super" parent, the parent is the root node.
+			return
+		}
+		parentIndex := parent.Parent.Index(parent)
+		if len(parent.Parent.Children) == 1 {
+			// There are no more children to pass ownership to!
+			return
+		}
+		// Change ownership to next parent and remove ownership from previous parent.
+		newParent := parent.Parent.Children[parentIndex-1]
+		newParent.Children = append([]*AgendaNode{node}, newParent.Children...)
+		parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
+	} else {
+		// Shuffle index up within children.
+		parent.Children[index], parent.Children[index-1] = parent.Children[index-1], parent.Children[index]
+	}
 }
