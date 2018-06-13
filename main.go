@@ -3,11 +3,25 @@ package main
 /*
 
 TODO:
-[ ] Allow editing an agenda item
+[ ] Bug:
+    > Steps:
+      - Create item.
+      - Edit item.
+      - Create new item while editing.
+      - Return to main.
+    > Expected:
+      - New node is a child of edited node.
+    > Actual:
+      - New node is a child of parent node.
+
+[ ] Feature:
+    - Allow rendering of sub-tree. Ie., root is always blank, so don't render it?
+
+[✓] Allow editing an agenda item
   [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
   [✓] <enter> in the dialog: returns to main view, list item is updated.
-[ ] Properly draw nested lists
-  [ ] A given "level" consists of a node and all of its siblings.
+[✓] Properly draw nested lists
+  [✓] A given "level" consists of a node and all of its siblings.
       Each list represents all children for each node in this sibling chain.
 [✓] Allow moving an item up and down in the list.
 [✓] Allow adding a child item.
@@ -29,13 +43,13 @@ import (
 )
 
 var (
-	log      DebugLog
-	boxShown bool
+	log            DebugLog
+	boxShown       bool
+	rootAgendaNode *AgendaNode
 )
 
 func main() {
-	var editNode func(*AgendaNode, *AgendaNode, func(*AgendaNode))
-	var editNodeCallback func(*AgendaNode)
+	var editNode func(*AgendaNode, *AgendaNode)
 
 	newNodeStack := Stack{}
 	boxShown = false
@@ -47,18 +61,17 @@ func main() {
 	log.Primitive.SetBorder(true)
 	log.Log("Program loaded")
 
-	list := tview.NewList()
-	list.SetBorder(true)
-	list.SetTitle("Agenda")
-	list.SetSelectedFunc(func(index int, title string, body string, _ rune) {
-		node := rootAgendaNode.Children[index]
-		editNode(nil, node, editNodeCallback)
+	tree := NewTree(rootAgendaNode)
+	tree.SetBorder(true)
+	tree.SetTitle("Agenda")
+	tree.SetSelectedFunc(func(node *AgendaNode) {
+		editNode(nil, node)
 	})
 
 	flex := tview.NewFlex()
 	flex.SetFullScreen(false)
 	flex.SetDirection(tview.FlexColumn)
-	flex.AddItem(list, 0, 1, true)
+	flex.AddItem(tree, 0, 1, true)
 
 	help := tview.NewTextView()
 	help.SetBorder(true)
@@ -124,32 +137,25 @@ func main() {
 		return
 	}
 
-	addNodeCallback := func(node *AgendaNode) {
-		list.AddItem(node.Title, node.Text, 0, nil)
-	}
-
-	editNodeCallback = func(node *AgendaNode) {
-		index := list.GetCurrentItem()
-		list.SetItemText(index, node.Title, node.Text)
-	}
-
-	editNode = func(scratch *AgendaNode, node *AgendaNode, callback func(node *AgendaNode)) {
+	editNode = func(scratch *AgendaNode, node *AgendaNode) {
 		editNodeWidget := NewEditAgendaNodeWidget(app, node, scratch)
 		editNodeWidget.InputHandler = createEscHandler(func() {
 			if newNodeStack.Count() <= 1 {
 				inputStack.Enable(flexWidget.InputHandlerIndex)
 			}
-			if scratch != nil {
-				scratch.AddChild(node)
-			} else {
-				rootAgendaNode.AddChild(node)
+
+			if node.Parent == nil {
+				if scratch != nil {
+					scratch.AddChild(node)
+				} else {
+					rootAgendaNode.AddChild(node)
+				}
 			}
 			inputStack.Pop()
 			pageStack.Pop()
 			newNodeStack.Pop()
 			pages.SwitchToPage(pageStack.Top().Name)
 			log.Log("Exiting %v, switching to %v", editNodeWidget.Name, pageStack.Top().Name)
-			callback(node)
 			app.Draw()
 		})
 		editNodeWidget.InputHandlerIndex = inputStack.Push(editNodeWidget.InputHandler)
@@ -170,39 +176,39 @@ func main() {
 			log.Log("<pgup>")
 
 			// get index of currently selected item.
-			index := list.GetCurrentItem()
-			if index == 0 {
-				return nil
-			}
-			log.Log("index: %v, num items: %v", index, list.GetItemCount())
+			// index := list.GetCurrentItem()
+			// if index == 0 {
+			// 	return nil
+			// }
+			// log.Log("index: %v, num items: %v", index, list.GetItemCount())
 
-			node := rootAgendaNode.Children[index]
-			prevNode := rootAgendaNode.Children[index-1]
+			// node := rootAgendaNode.Children[index]
+			// prevNode := rootAgendaNode.Children[index-1]
 
-			list.SetItemText(index-1, node.Title, node.Text)
-			list.SetItemText(index, prevNode.Title, prevNode.Text)
-			list.SetCurrentItem(index - 1)
-			node.ShuffleUp()
+			// list.SetItemText(index-1, node.Title, node.Text)
+			// list.SetItemText(index, prevNode.Title, prevNode.Text)
+			// list.SetCurrentItem(index - 1)
+			// node.ShuffleUp()
 
 			result = nil
 
 		case tcell.KeyPgDn:
 			log.Log("<pgdn>")
 
-			// get index of currently selected item.
-			index := list.GetCurrentItem()
-			if list.GetItemCount() == index+1 {
-				return nil
-			}
-			log.Log("index: %v, num items: %v", index, list.GetItemCount())
+			// // get index of currently selected item.
+			// index := list.GetCurrentItem()
+			// if list.GetItemCount() == index+1 {
+			// 	return nil
+			// }
+			// log.Log("index: %v, num items: %v", index, list.GetItemCount())
 
-			node := rootAgendaNode.Children[index]
-			nextNode := rootAgendaNode.Children[index+1]
+			// node := rootAgendaNode.Children[index]
+			// nextNode := rootAgendaNode.Children[index+1]
 
-			list.SetItemText(index+1, node.Title, node.Text)
-			list.SetItemText(index, nextNode.Title, nextNode.Text)
-			list.SetCurrentItem(index + 1)
-			node.ShuffleDown()
+			// list.SetItemText(index+1, node.Title, node.Text)
+			// list.SetItemText(index, nextNode.Title, nextNode.Text)
+			// list.SetCurrentItem(index + 1)
+			// node.ShuffleDown()
 
 			result = nil
 
@@ -226,7 +232,7 @@ func main() {
 				}
 				node := &AgendaNode{}
 				newNodeStack.Push(node)
-				editNode(scratchNode, node, addNodeCallback)
+				editNode(scratchNode, node)
 				result = nil
 			}
 		}

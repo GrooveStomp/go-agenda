@@ -7,9 +7,10 @@ import (
 
 type Tree struct {
 	*tview.Box
-	Root     *AgendaNode
-	Indent   int
-	Selected *AgendaNode
+	Root         *AgendaNode
+	Indent       int
+	Selected     *AgendaNode
+	selectedFunc func(*AgendaNode)
 }
 
 func NewTree(root *AgendaNode) *Tree {
@@ -60,33 +61,26 @@ func (t *Tree) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 				t.Selected = previous
 			}
 
+		case tcell.KeyEnter:
+			t.selectedFunc(t.Selected)
+
 		default:
 		}
 	})
 }
 
-// var (
-// 	debug *tview.TextView
-// )
+func (t *Tree) SetSelectedFunc(callback func(node *AgendaNode)) {
+	t.selectedFunc = callback
+}
 
 // func main() {
 // 	app := tview.NewApplication()
-
-// 	debug = tview.NewTextView()
-// 	debug.SetBorder(true)
-
-// 	grid := tview.NewGrid()
-// 	grid.SetRows(-1, 3)
-// 	grid.SetColumns(-1)
 
 // 	tree := NewTree(NewAgendaTree())
 // 	tree.SetBorder(true)
 // 	tree.SetTitle("Tree")
 
-// 	grid.AddItem(tree, 0, 0, 1, 1, 1, 1, true)
-// 	grid.AddItem(debug, 1, 0, 1, 1, 1, 1, false)
-
-// 	if err := app.SetRoot(grid, true).Run(); err != nil {
+// 	if err := app.SetRoot(tree, true).Run(); err != nil {
 // 		panic(err)
 // 	}
 
