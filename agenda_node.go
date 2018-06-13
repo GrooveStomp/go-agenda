@@ -35,38 +35,49 @@ import (
 )
 
 type AgendaNode struct {
-	Parent   *AgendaNode
-	Title    string
-	Text     string
-	Sibling  *AgendaNode
-	Children []*AgendaNode
-	Tags     []string
+	Parent      *AgendaNode
+	Title       string
+	Text        string
+	NextSibling *AgendaNode
+	PrevSibling *AgendaNode
+	Children    []*AgendaNode
+	Tags        []string
 }
 
 // func main() {
-//   tree := NewNode("tree", "text0 text0 text0 text0", []string{})
+// r := NewNode("r", "r r r", []string{})
 
-//   treec1 := NewNode("treec1", "text1 text1 text1 text1", []string{})
-//   tree.AddChild(treec1)
+// rc1 := NewNode("rc1", "rc1 rc1 rc1", []string{})
+// r.AddChild(rc1)
 
-//   treec1s1 := NewNode("treec1s1", "text1b text1b text1b text1b", []string{})
-//   treec1.AddSibling(treec1s1)
+// rc1s1 := NewNode("rc1s1", "rc1s1 rc1s1 rc1s1", []string{})
+// rc1.AddSibling(rc1s1)
 
-//   treec1s1c1 := NewNode("treec1s1c1", "text text text text", []string{})
-//   treec1s1.AddChild(treec1s1c1)
+// rc1s1c1 := NewNode("rc1s1c1", "rc1s1c1 rc1s1c1 rc1s1c1", []string{})
+// rc1s1.AddChild(rc1s1c1)
 
-//   treec1s2 := NewNode("treec1s2", "text1c text1c text1c text1c", []string{})
-//   treec1s1.AddSibling(treec1s2)
+// rc1s2 := NewNode("rc1s2", "rc1s2 rc1s2 rc1s2", []string{})
+// rc1s1.AddSibling(rc1s2)
 
-//   treec2 := NewNode("treec2", "text2 text2 text2 text2", []string{})
-//   tree.AddChild(treec2)
+// rc2 := NewNode("rc2", "rc2 rc2 rc2", []string{})
+// r.AddChild(rc2)
 
-//   tree.Walk(func(node *AgendaNode, indentLevel int) {
-//     node.Print(os.Stdout, indentLevel, 5)
-//   })
+// rc1s3 := NewNode("rc1s3", "rc1s3 rc1s3 rc1s3", []string{})
+// rc1s1.AddSibling(rc1s3)
+
+// rc1s3c1 := NewNode("rc1s3c1", "rc1s3c1 rc1s3c1 rc1s3c1", []string{})
+// rc1s3c1.AddSibling(rc1s3c1)
+
+// r.PrintTree(os.Stdout, 5)
 // }
 
-func (node *AgendaNode) Print(w io.Writer, indentLevel int, indentScale int) {
+func (tree *AgendaNode) PrintTree(w io.Writer, indent int) {
+	tree.Walk(func(node *AgendaNode, depth int) {
+		node.Write(w, depth, indent)
+	})
+}
+
+func (node *AgendaNode) Write(w io.Writer, indentLevel int, indentScale int) {
 	io.WriteString(w, fmt.Sprintf("%*s%v\n", indentLevel*indentScale, " ", node.Title))
 	io.WriteString(w, fmt.Sprintf("%*s%v\n", indentLevel*indentScale, " ", node.Text))
 }
@@ -82,13 +93,14 @@ func (parent *AgendaNode) AddChild(node *AgendaNode) {
 }
 
 func (node *AgendaNode) AddSibling(new *AgendaNode) {
-	for ; node.Sibling != nil; node = node.Sibling {
+	for ; node.NextSibling != nil; node = node.NextSibling {
 	}
-	node.Sibling = new
+	node.NextSibling = new
+	new.PrevSibling = node
 	new.Parent = node.Parent
 }
 
-func (parent *AgendaNode) Index(child *AgendaNode) int {
+func (parent *AgendaNode) IndexChild(child *AgendaNode) int {
 	for i := range parent.Children {
 		if parent.Children[i] == child {
 			return i
@@ -97,22 +109,32 @@ func (parent *AgendaNode) Index(child *AgendaNode) int {
 	return -1
 }
 
-// Traverses sibling nodes until nil is encountered. No children are touched.
-//
-func (node *AgendaNode) VisitSiblings(siblingNum int, callback func(*AgendaNode, int)) {
-	for ; node.Sibling != nil; node = node.Sibling {
-		callback(node, siblingNum)
-		siblingNum++
-	}
+func (root *AgendaNode) Prev(sigil *AgendaNode) (result *AgendaNode) {
+	result = nil
+	var lastNode *AgendaNode = nil
+
+	root.Walk(func(node *AgendaNode, _ int) {
+		if node == sigil {
+			result = lastNode
+		}
+		lastNode = node
+	})
+
+	return
 }
 
-// Traverses child nodes until nil is encountered. No siblings are touched.
-//
-func (node *AgendaNode) VisitChildren(childNum int, callback func(*AgendaNode, int)) {
-	for i := range node.Children {
-		child := node.Children[i]
-		callback(child, i)
-	}
+func (root *AgendaNode) Next(sigil *AgendaNode) (result *AgendaNode) {
+	result = nil
+	var lastNode *AgendaNode = nil
+
+	root.Walk(func(node *AgendaNode, _ int) {
+		if lastNode == sigil {
+			result = node
+		}
+		lastNode = node
+	})
+
+	return
 }
 
 // Invoke callback on each node in the tree.
@@ -121,23 +143,23 @@ func (node *AgendaNode) VisitChildren(childNum int, callback func(*AgendaNode, i
 //        Takes the node being visited and how many levels deep in the tree the node is.
 //
 func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
-	type cbfn func(*AgendaNode, int)
-	var walk func(*AgendaNode, int, cbfn)
+	var walk func(*AgendaNode, int, bool)
 
-	walk = func(node *AgendaNode, depth int, callback cbfn) {
+	walk = func(node *AgendaNode, depth int, processSiblings bool) {
 		callback(node, depth)
 
 		for i := range node.Children {
-			child := node.Children[i]
-			walk(child, depth+1, callback)
+			walk(node.Children[i], depth+1, true)
 		}
 
-		for ; node.Sibling != nil; node = node.Sibling {
-			walk(node.Sibling, depth, callback)
+		if processSiblings {
+			for node = node.NextSibling; node != nil; node = node.NextSibling {
+				walk(node, depth, false)
+			}
 		}
 	}
 
-	walk(node, 0, callback)
+	walk(node, 0, true)
 }
 
 // Move a node "down".
@@ -151,7 +173,7 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 //
 func (node *AgendaNode) ShuffleDown() {
 	parent := node.Parent
-	index := parent.Index(node)
+	index := parent.IndexChild(node)
 	if index == -1 {
 		panic(fmt.Errorf("Couldn't find node in children!"))
 	}
@@ -162,7 +184,7 @@ func (node *AgendaNode) ShuffleDown() {
 			// There is no "super" parent, the parent is the root node.
 			return
 		}
-		parentIndex := parent.Parent.Index(parent)
+		parentIndex := parent.Parent.IndexChild(parent)
 		if len(parent.Parent.Children) <= parentIndex+1 {
 			// There are no more children to pass ownership to!
 			return
@@ -188,7 +210,7 @@ func (node *AgendaNode) ShuffleDown() {
 //
 func (node *AgendaNode) ShuffleUp() {
 	parent := node.Parent
-	index := parent.Index(node)
+	index := parent.IndexChild(node)
 	if index == -1 {
 		panic(fmt.Errorf("Couldn't find node in children!"))
 	}
@@ -199,7 +221,7 @@ func (node *AgendaNode) ShuffleUp() {
 			// There is no "super" parent, the parent is the root node.
 			return
 		}
-		parentIndex := parent.Parent.Index(parent)
+		parentIndex := parent.Parent.IndexChild(parent)
 		if len(parent.Parent.Children) == 1 {
 			// There are no more children to pass ownership to!
 			return

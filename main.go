@@ -7,6 +7,8 @@ TODO:
   [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
   [✓] <enter> in the dialog: returns to main view, list item is updated.
 [ ] Properly draw nested lists
+  [ ] A given "level" consists of a node and all of its siblings.
+      Each list represents all children for each node in this sibling chain.
 [✓] Allow moving an item up and down in the list.
 [✓] Allow adding a child item.
 [ ] Allow indenting/de-indenting an item.
@@ -242,9 +244,7 @@ func main() {
 		panic(err)
 	}
 
-	rootAgendaNode.Walk(func(node *AgendaNode, indentLevel int) {
-		node.Print(os.Stdout, indentLevel, 5)
-	})
+	rootAgendaNode.PrintTree(os.Stdout, 5)
 }
 
 var helpText = `
