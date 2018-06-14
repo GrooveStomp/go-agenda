@@ -18,7 +18,7 @@ func NewTree(root *AgendaNode) *Tree {
 		Box:      tview.NewBox(),
 		Root:     root,
 		Indent:   5,
-		Selected: root,
+		Selected: nil,
 	}
 }
 
@@ -64,6 +64,14 @@ func (t *Tree) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 		case tcell.KeyEnter:
 			t.selectedFunc(t.Selected)
 
+		case tcell.KeyPgUp:
+			//			log.Log("ShuffleUp on selected: %+v", t.Selected)
+			t.Root.ShuffleUp(t.Selected)
+
+		case tcell.KeyPgDn:
+			//			log.Log("ShuffleDown on selected: %+v", t.Selected)
+			t.Root.ShuffleDown(t.Selected)
+
 		default:
 		}
 	})
@@ -85,4 +93,31 @@ func (t *Tree) SetSelectedFunc(callback func(node *AgendaNode)) {
 // 	}
 
 // 	NewAgendaTree().PrintTree(os.Stdout, 5)
+// }
+
+// func NewAgendaTree() *AgendaNode {
+// 	r := NewNode("r", "r r r", []string{})
+
+// 	rc1 := NewNode("rc1", "rc1 rc1 rc1", []string{})
+// 	r.AddChild(rc1)
+
+// 	rc1s1 := NewNode("rc1s1", "rc1s1 rc1s1 rc1s1", []string{})
+// 	rc1.AddSibling(rc1s1)
+
+// 	rc1s1c1 := NewNode("rc1s1c1", "rc1s1c1 rc1s1c1 rc1s1c1", []string{})
+// 	rc1s1.AddChild(rc1s1c1)
+
+// 	rc1s2 := NewNode("rc1s2", "rc1s2 rc1s2 rc1s2", []string{})
+// 	rc1s1.AddSibling(rc1s2)
+
+// 	rc2 := NewNode("rc2", "rc2 rc2 rc2", []string{})
+// 	r.AddChild(rc2)
+
+// 	rc1s3 := NewNode("rc1s3", "rc1s3 rc1s3 rc1s3", []string{})
+// 	rc1s1.AddSibling(rc1s3)
+
+// 	rc1s3c1 := NewNode("rc1s3c1", "rc1s3c1 rc1s3c1 rc1s3c1", []string{})
+// 	rc1s3.AddSibling(rc1s3c1)
+
+// 	return r
 // }

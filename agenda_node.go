@@ -82,7 +82,7 @@ func (node *AgendaNode) Write(w io.Writer, indentLevel int, indentScale int) {
 	io.WriteString(w, fmt.Sprintf("%*s%v\n", indentLevel*indentScale, " ", node.Text))
 }
 
-func NewNode(title, text string, tags []string) *AgendaNode {
+func NewNode(title, text string, tags ...string) *AgendaNode {
 	new := &AgendaNode{Title: title, Text: text, Tags: tags}
 	return new
 }
@@ -97,7 +97,6 @@ func (node *AgendaNode) AddSibling(new *AgendaNode) {
 	}
 	node.NextSibling = new
 	new.PrevSibling = node
-	new.Parent = node.Parent
 }
 
 func (parent *AgendaNode) IndexChild(child *AgendaNode) int {
@@ -109,29 +108,29 @@ func (parent *AgendaNode) IndexChild(child *AgendaNode) int {
 	return -1
 }
 
-func (root *AgendaNode) Prev(sigil *AgendaNode) (result *AgendaNode) {
-	result = nil
-	var lastNode *AgendaNode = nil
+func (root *AgendaNode) Prev(subject *AgendaNode) (wanted *AgendaNode) {
+	wanted = nil
+	var last *AgendaNode = nil
 
-	root.Walk(func(node *AgendaNode, _ int) {
-		if node == sigil {
-			result = lastNode
+	root.Walk(func(visitee *AgendaNode, _ int) {
+		if visitee == subject {
+			wanted = last
 		}
-		lastNode = node
+		last = visitee
 	})
 
 	return
 }
 
-func (root *AgendaNode) Next(sigil *AgendaNode) (result *AgendaNode) {
-	result = nil
-	var lastNode *AgendaNode = nil
+func (root *AgendaNode) Next(subject *AgendaNode) (wanted *AgendaNode) {
+	wanted = nil
+	var last *AgendaNode = nil
 
-	root.Walk(func(node *AgendaNode, _ int) {
-		if lastNode == sigil {
-			result = node
+	root.Walk(func(visitee *AgendaNode, _ int) {
+		if last == subject {
+			wanted = visitee
 		}
-		lastNode = node
+		last = visitee
 	})
 
 	return
@@ -159,7 +158,10 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 		}
 	}
 
-	walk(node, 0, true)
+	// NOTE(AARONO): Skip the root node.
+	for i := range node.Children {
+		walk(node.Children[i], 0, true)
+	}
 }
 
 // Move a node "down".
@@ -171,31 +173,10 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 //     Otherwise:
 //       Stop. Do nothing.
 //
-func (node *AgendaNode) ShuffleDown() {
-	parent := node.Parent
-	index := parent.IndexChild(node)
-	if index == -1 {
-		panic(fmt.Errorf("Couldn't find node in children!"))
-	}
-
-	if index == len(parent.Children)-1 {
-		// Shuffle to next parent.
-		if parent.Parent == nil {
-			// There is no "super" parent, the parent is the root node.
-			return
-		}
-		parentIndex := parent.Parent.IndexChild(parent)
-		if len(parent.Parent.Children) <= parentIndex+1 {
-			// There are no more children to pass ownership to!
-			return
-		}
-		// Change ownership to next parent and remove ownership from previous parent.
-		newParent := parent.Parent.Children[parentIndex+1]
-		newParent.Children = append(newParent.Children, node)
-		parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
-	} else {
-		// Shuffle index up within children.
-		parent.Children[index], parent.Children[index+1] = parent.Children[index+1], parent.Children[index]
+func (tree *AgendaNode) ShuffleDown(subject *AgendaNode) {
+	next := tree.Next(subject)
+	if next != nil {
+		tree.swap(subject, next)
 	}
 }
 
@@ -208,30 +189,39 @@ func (node *AgendaNode) ShuffleDown() {
 //     Otherwise:
 //       Stop. Do nothing.
 //
-func (node *AgendaNode) ShuffleUp() {
-	parent := node.Parent
-	index := parent.IndexChild(node)
-	if index == -1 {
-		panic(fmt.Errorf("Couldn't find node in children!"))
+func (tree *AgendaNode) ShuffleUp(subject *AgendaNode) {
+	prev := tree.Prev(subject)
+	if prev != nil {
+		tree.swap(subject, prev)
+	}
+}
+
+func (tree *AgendaNode) swap(left *AgendaNode, right *AgendaNode) {
+	tmp := &AgendaNode{}
+	left.move(tmp)
+	right.move(left)
+	tmp.move(right)
+}
+
+func (src *AgendaNode) move(dst *AgendaNode) {
+	dst.Parent = src.Parent
+	dst.NextSibling = src.NextSibling
+	dst.PrevSibling = src.PrevSibling
+
+	if dst.NextSibling != nil {
+		dst.NextSibling.PrevSibling = dst
 	}
 
-	if len(parent.Children) == 1 {
-		// Shuffle to previous parent.
-		if parent.Parent == nil {
-			// There is no "super" parent, the parent is the root node.
-			return
+	if dst.PrevSibling != nil {
+		dst.PrevSibling.NextSibling = dst
+	}
+
+	if dst.Parent != nil {
+		index := dst.Parent.IndexChild(src)
+		if index == -1 {
+			panic("Move! Parent!")
+		} else {
+			dst.Parent.Children[index] = dst
 		}
-		parentIndex := parent.Parent.IndexChild(parent)
-		if len(parent.Parent.Children) == 1 {
-			// There are no more children to pass ownership to!
-			return
-		}
-		// Change ownership to next parent and remove ownership from previous parent.
-		newParent := parent.Parent.Children[parentIndex-1]
-		newParent.Children = append([]*AgendaNode{node}, newParent.Children...)
-		parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
-	} else {
-		// Shuffle index up within children.
-		parent.Children[index], parent.Children[index-1] = parent.Children[index-1], parent.Children[index]
 	}
 }

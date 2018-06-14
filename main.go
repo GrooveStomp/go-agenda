@@ -3,7 +3,7 @@ package main
 /*
 
 TODO:
-[ ] Bug:
+[ ] Bug: Can't add new child for existing item.
     > Steps:
       - Create item.
       - Edit item.
@@ -14,24 +14,31 @@ TODO:
     > Actual:
       - New node is a child of parent node.
 
-[ ] Feature:
-    - Allow rendering of sub-tree. Ie., root is always blank, so don't render it?
+[ ] Bug: Moving items up and down is buggy.
+    > Steps: (Works going down, too.)
+      - Use the default tree.
+      - Move a deeply nested child up (pgup).
+    > Expected:
+      - Child is moved as a child of the next item up.
+    > Actual:
+      - Previous item is deleted, child is moved up.
 
-[✓] Allow editing an agenda item
+[✓] Feature: Allow rendering of sub-tree. Ie., root is always blank, so don't render it?
+[✓] Feature: Allow editing an agenda item
   [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
   [✓] <enter> in the dialog: returns to main view, list item is updated.
-[✓] Properly draw nested lists
+[✓] Feature: Properly draw nested lists
   [✓] A given "level" consists of a node and all of its siblings.
       Each list represents all children for each node in this sibling chain.
-[✓] Allow moving an item up and down in the list.
-[✓] Allow adding a child item.
-[ ] Allow indenting/de-indenting an item.
-[ ] Allow nesting agendas and fluidly adding siblings and whatnot.
-  [ ] Ah crap.  That means the text from the pop-up can't just be taken "as-is"
-[ ] Modularize everything!  Ha ha.
-  [ ] Separation of concerns, that kind of things.  UI and BE are intermixed pretty liberally.
-[ ] Prototype and experiment with fluidity and mechanics of building nestable, hierarchical lists in the UI.
-[ ] Implement a textarea widget, perhaps built upon gemacs or micro or gomacs?
+[✓] Feature: llow moving an item up and down in the list.
+[✓] Feature: Allow adding a child item.
+[ ] Feature: Allow indenting/de-indenting an item.
+[ ] Feature: Render children somehow in the edit dialog.
+[ ] Feature: When adding children in the edit dialog, implicitly create sibling nodes around them.
+[ ] Feature: Disable selecting siblings when traversing the list. (Always jump to first sibling.)
+[ ] Feature: Collapse siblings if children are moved. (Maybe not without undo?)
+[ ] Feature: Implement a textarea widget, perhaps built upon gemacs or micro or gomacs or gemacs?
+[ ] Feature: Undo.
 
 */
 
@@ -53,7 +60,7 @@ func main() {
 
 	newNodeStack := Stack{}
 	boxShown = false
-	rootAgendaNode := NewNode("", "", []string{})
+	rootAgendaNode := NewAgendaTree()
 
 	mainGrid := tview.NewGrid()
 
@@ -144,11 +151,12 @@ func main() {
 				inputStack.Enable(flexWidget.InputHandlerIndex)
 			}
 
-			if node.Parent == nil {
+			if node.Parent == nil && node.NextSibling == nil && node.PrevSibling == nil {
 				if scratch != nil {
 					scratch.AddChild(node)
 				} else {
 					rootAgendaNode.AddChild(node)
+					tree.Selected = node
 				}
 			}
 			inputStack.Pop()
@@ -172,44 +180,8 @@ func main() {
 		result = event
 
 		switch event.Key() {
-		case tcell.KeyPgUp:
-			log.Log("<pgup>")
-
-			// get index of currently selected item.
-			// index := list.GetCurrentItem()
-			// if index == 0 {
-			// 	return nil
-			// }
-			// log.Log("index: %v, num items: %v", index, list.GetItemCount())
-
-			// node := rootAgendaNode.Children[index]
-			// prevNode := rootAgendaNode.Children[index-1]
-
-			// list.SetItemText(index-1, node.Title, node.Text)
-			// list.SetItemText(index, prevNode.Title, prevNode.Text)
-			// list.SetCurrentItem(index - 1)
-			// node.ShuffleUp()
-
-			result = nil
-
-		case tcell.KeyPgDn:
-			log.Log("<pgdn>")
-
-			// // get index of currently selected item.
-			// index := list.GetCurrentItem()
-			// if list.GetItemCount() == index+1 {
-			// 	return nil
-			// }
-			// log.Log("index: %v, num items: %v", index, list.GetItemCount())
-
-			// node := rootAgendaNode.Children[index]
-			// nextNode := rootAgendaNode.Children[index+1]
-
-			// list.SetItemText(index+1, node.Title, node.Text)
-			// list.SetItemText(index, nextNode.Title, nextNode.Text)
-			// list.SetCurrentItem(index + 1)
-			// node.ShuffleDown()
-
+		case tcell.KeyCtrlR:
+			app.Draw()
 			result = nil
 
 		case tcell.KeyRune:
@@ -263,3 +235,51 @@ var helpText = `
 <ctrl+up>   Move an item up in the list. (Preserves nesting level.)
 <ctrl+down> Move an item down in the list. (Preserves nesting level.)
 `
+
+func NewAgendaTree() *AgendaNode {
+	var p *AgendaNode
+	var c *AgendaNode
+	var index int
+	r := NewNode("r", "r r r")
+
+	rc1 := NewNode("rc1", "rc1 rc1 rc1")
+	r.AddChild(rc1)
+	p = r
+	c = rc1
+	index = p.IndexChild(c)
+	if index == -1 {
+		panic("1")
+	}
+
+	rc1s1 := NewNode("rc1s1", "rc1s1 rc1s1 rc1s1")
+	rc1.AddSibling(rc1s1)
+
+	rc1s1c1 := NewNode("rc1s1c1", "rc1s1c1 rc1s1c1 rc1s1c1")
+	rc1s1.AddChild(rc1s1c1)
+	p = rc1s1
+	c = rc1s1c1
+	index = p.IndexChild(c)
+	if index == -1 {
+		panic("3")
+	}
+
+	rc1s2 := NewNode("rc1s2", "rc1s2 rc1s2 rc1s2")
+	rc1s1.AddSibling(rc1s2)
+
+	rc2 := NewNode("rc2", "rc2 rc2 rc2")
+	r.AddChild(rc2)
+	p = r
+	c = rc2
+	index = p.IndexChild(c)
+	if index == -1 {
+		panic("5")
+	}
+
+	rc1s3 := NewNode("rc1s3", "rc1s3 rc1s3 rc1s3")
+	rc1s1.AddSibling(rc1s3)
+
+	rc1s3c1 := NewNode("rc1s3c1", "rc1s3c1 rc1s3c1 rc1s3c1")
+	rc1s3.AddSibling(rc1s3c1)
+
+	return r
+}
