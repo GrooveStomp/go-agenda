@@ -70,6 +70,12 @@ func (t *Tree) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 		case tcell.KeyCtrlD:
 			t.Selected.MakeNextSibling()
 
+		case tcell.KeyLeft:
+			t.Selected.MoveUpTree()
+
+		case tcell.KeyRight:
+			t.Selected.MoveDownTree()
+
 		default:
 		}
 	})

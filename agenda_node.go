@@ -245,20 +245,36 @@ func (subject *AgendaNode) MakePrevSibling() {
 //
 func (subject *AgendaNode) MoveUpTree() {
 	if subject.Parent == nil {
+		log.Log("Couldn't find parent")
 		return
 	}
-	parent := subject.Parent
+	curParent := subject.Parent
+	canonicalParent := curParent
 
-	index := parent.IndexChild(subject)
+	index := curParent.IndexChild(subject)
 	if index == -1 {
-		panic("Error!")
-	}
-	parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
-
-	if parent.Parent == nil {
+		log.Log("Couldn't find index of node in parent")
 		return
 	}
-	parent = parent.Parent
+
+	if curParent.Parent == nil {
+		tmpParent := curParent
+		for ; tmpParent.PrevContinuation != nil; tmpParent = tmpParent.PrevContinuation {
+		}
+		for ; tmpParent.NextContinuation != nil; tmpParent = tmpParent.NextContinuation {
+			if tmpParent.Parent != nil {
+				canonicalParent = tmpParent
+				break
+			}
+		}
+	}
+	if canonicalParent.Parent == nil {
+		log.Log("Couldn't find parent's parent")
+		return
+	}
+
+	curParent.Children = append(curParent.Children[:index], curParent.Children[index+1:]...)
+	parent := canonicalParent.Parent
 	parent.Children = append([]*AgendaNode{subject}, parent.Children...)
 	subject.Parent = parent
 }
