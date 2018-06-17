@@ -283,6 +283,22 @@ func (subject *AgendaNode) MoveUpTree() {
 // aka Indent.
 //
 func (subject *AgendaNode) MoveDownTree() {
+	if subject.Parent == nil {
+		log.Log("Node must have a parent.")
+		return
+	}
+	parent := subject.Parent
+	index := parent.IndexChild(subject)
+	numSiblings := len(parent.Children)
+	if numSiblings == 1 {
+		log.Log("Must have at least one sibling.")
+		return
+	}
+
+	parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
+	newParent := parent.Children[0]
+	newParent.Children = append([]*AgendaNode{subject}, newParent.Children...)
+	subject.Parent = newParent
 }
 
 // Swap two nodes in thre tree so that left appears where right was, and right
