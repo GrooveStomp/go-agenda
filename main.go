@@ -151,7 +151,7 @@ func main() {
 				inputStack.Enable(flexWidget.InputHandlerIndex)
 			}
 
-			if node.Parent == nil && node.NextSibling == nil && node.PrevSibling == nil {
+			if node.Parent == nil && node.NextContinuation == nil && node.PrevContinuation == nil {
 				if scratch != nil {
 					scratch.AddChild(node)
 				} else {
@@ -252,7 +252,7 @@ func NewAgendaTree() *AgendaNode {
 	}
 
 	rc1s1 := NewNode("rc1s1", "rc1s1 rc1s1 rc1s1")
-	rc1.AddSibling(rc1s1)
+	rc1.AddContinuation(rc1s1)
 
 	rc1s1c1 := NewNode("rc1s1c1", "rc1s1c1 rc1s1c1 rc1s1c1")
 	rc1s1.AddChild(rc1s1c1)
@@ -264,7 +264,7 @@ func NewAgendaTree() *AgendaNode {
 	}
 
 	rc1s2 := NewNode("rc1s2", "rc1s2 rc1s2 rc1s2")
-	rc1s1.AddSibling(rc1s2)
+	rc1s1.AddContinuation(rc1s2)
 
 	rc2 := NewNode("rc2", "rc2 rc2 rc2")
 	r.AddChild(rc2)
@@ -276,10 +276,10 @@ func NewAgendaTree() *AgendaNode {
 	}
 
 	rc1s3 := NewNode("rc1s3", "rc1s3 rc1s3 rc1s3")
-	rc1s1.AddSibling(rc1s3)
+	rc1s1.AddContinuation(rc1s3)
 
 	rc1s3c1 := NewNode("rc1s3c1", "rc1s3c1 rc1s3c1 rc1s3c1")
-	rc1s3.AddSibling(rc1s3c1)
+	rc1s3.AddContinuation(rc1s3c1)
 
 	return r
 }

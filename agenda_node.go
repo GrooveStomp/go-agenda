@@ -22,11 +22,27 @@ Use this sample for reference:
 |  text 1-3
 +-------------------------------------------------------------------------------
 
-text 1-1, text 1-2 and text 1-3 are all Siblings of each other.
+text 1-1, text 1-2 and text 1-3 are all Continuations of each other.
 text 1-2 and text 1-3 should not have headings of their own.
 
-text 1a-1 and text 1b-1 are children of text 1-1 (but *not* 1-2 or 1-3)
+text 1a-1 and text 1b-1 are children of text 1-1 (but *not* 1-2 or 1-3), and we
+call them siblings of each other.
 
++-------------------------------------------------------------------------------
+| Operations:
+| Next Parent
+|   Given a node in the tree, find the next suitable parent which would occur
+|   "down" in the list as rendered visually via PrintTree.
+| Prev Parent
+|   Given a node in the tree, find the previous suitable parent which would
+|   occur "up" in the list as rendered visually via PrintTree.
+| Outdent
+|   Move the given node up one level in the tree so it becomes a child of its
+|   current parent's parent.
+| Indent
+|   Move the given node down one level in the tree so it becomes a child of the
+|   current node.
++-------------------------------------------------------------------------------
 */
 
 import (
@@ -35,13 +51,13 @@ import (
 )
 
 type AgendaNode struct {
-	Parent      *AgendaNode
-	Title       string
-	Text        string
-	NextSibling *AgendaNode
-	PrevSibling *AgendaNode
-	Children    []*AgendaNode
-	Tags        []string
+	Parent           *AgendaNode
+	Title            string
+	Text             string
+	NextContinuation *AgendaNode
+	PrevContinuation *AgendaNode
+	Children         []*AgendaNode
+	Tags             []string
 }
 
 // func main() {
@@ -51,22 +67,22 @@ type AgendaNode struct {
 // r.AddChild(rc1)
 
 // rc1s1 := NewNode("rc1s1", "rc1s1 rc1s1 rc1s1", []string{})
-// rc1.AddSibling(rc1s1)
+// rc1.AddContinuation(rc1s1)
 
 // rc1s1c1 := NewNode("rc1s1c1", "rc1s1c1 rc1s1c1 rc1s1c1", []string{})
 // rc1s1.AddChild(rc1s1c1)
 
 // rc1s2 := NewNode("rc1s2", "rc1s2 rc1s2 rc1s2", []string{})
-// rc1s1.AddSibling(rc1s2)
+// rc1s1.AddContinuation(rc1s2)
 
 // rc2 := NewNode("rc2", "rc2 rc2 rc2", []string{})
 // r.AddChild(rc2)
 
 // rc1s3 := NewNode("rc1s3", "rc1s3 rc1s3 rc1s3", []string{})
-// rc1s1.AddSibling(rc1s3)
+// rc1s1.AddContinuation(rc1s3)
 
 // rc1s3c1 := NewNode("rc1s3c1", "rc1s3c1 rc1s3c1 rc1s3c1", []string{})
-// rc1s3c1.AddSibling(rc1s3c1)
+// rc1s3c1.AddContinuation(rc1s3c1)
 
 // r.PrintTree(os.Stdout, 5)
 // }
@@ -92,11 +108,11 @@ func (parent *AgendaNode) AddChild(node *AgendaNode) {
 	node.Parent = parent
 }
 
-func (node *AgendaNode) AddSibling(new *AgendaNode) {
-	for ; node.NextSibling != nil; node = node.NextSibling {
+func (node *AgendaNode) AddContinuation(new *AgendaNode) {
+	for ; node.NextContinuation != nil; node = node.NextContinuation {
 	}
-	node.NextSibling = new
-	new.PrevSibling = node
+	node.NextContinuation = new
+	new.PrevContinuation = node
 }
 
 func (parent *AgendaNode) IndexChild(child *AgendaNode) int {
@@ -137,30 +153,28 @@ func (root *AgendaNode) Next(subject *AgendaNode) (wanted *AgendaNode) {
 }
 
 // Invoke callback on each node in the tree.
-// Walk performs a depth-first, sibling-second traversal of the tree.
+// Walk performs a depth-first, continuation-second traversal of the tree.
 // @param callback
 //        Takes the node being visited and how many levels deep in the tree the node is.
 //
 func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
-	var walk func(*AgendaNode, int, bool)
+	var walk func(*AgendaNode, int)
 
-	walk = func(node *AgendaNode, depth int, processSiblings bool) {
+	walk = func(node *AgendaNode, depth int) {
 		callback(node, depth)
 
 		for i := range node.Children {
-			walk(node.Children[i], depth+1, true)
+			walk(node.Children[i], depth+1)
 		}
 
-		if processSiblings {
-			for node = node.NextSibling; node != nil; node = node.NextSibling {
-				walk(node, depth, false)
-			}
+		if node.NextContinuation != nil {
+			walk(node.NextContinuation, depth)
 		}
 	}
 
 	// NOTE(AARONO): Skip the root node.
 	for i := range node.Children {
-		walk(node.Children[i], 0, true)
+		walk(node.Children[i], 0)
 	}
 }
 
@@ -173,11 +187,28 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 //     Otherwise:
 //       Stop. Do nothing.
 //
-func (tree *AgendaNode) ShuffleDown(subject *AgendaNode) {
-	next := tree.Next(subject)
-	if next != nil {
-		tree.swap(subject, next)
+func (subject *AgendaNode) MakeNextSibling() {
+	// TODO(AARONO): Debug this!  Doesn't seem to do anything.
+	// This only works for non-continuation nodes. ie., must have a parent.
+	if subject.Parent == nil {
+		log.Log("No parent, only works for non-continuation nodes.")
+		return
 	}
+
+	parent := subject.Parent
+	index := parent.IndexChild(subject)
+	count := len(parent.Children)
+
+	if index == count-1 {
+		log.Log("node already at last index.")
+		return
+	}
+
+	rest := parent.Children[index+1:]
+	parent.Children = parent.Children[:index]
+	parent.Children = append(parent.Children, rest[0])
+	parent.Children = append(parent.Children, subject)
+	parent.Children = append(parent.Children, rest[1:]...)
 }
 
 // Move a node "up".
@@ -189,31 +220,78 @@ func (tree *AgendaNode) ShuffleDown(subject *AgendaNode) {
 //     Otherwise:
 //       Stop. Do nothing.
 //
-func (tree *AgendaNode) ShuffleUp(subject *AgendaNode) {
-	prev := tree.Prev(subject)
-	if prev != nil {
-		tree.swap(subject, prev)
+func (subject *AgendaNode) MakePrevSibling() {
+	// TODO(AARONO): Debug this!  Doesn't seem to do anything.
+	// This only works for non-continuation nodes. ie., must have a parent.
+	if subject.Parent == nil {
+		log.Log("No parent, only works for non-continuation nodes.")
+		return
 	}
+
+	parent := subject.Parent
+	index := parent.IndexChild(subject)
+
+	if index == 0 {
+		log.Log("node already at first index.")
+		return
+	}
+
+	rest := append(parent.Children[:index], parent.Children[index+1:]...)
+	parent.Children = append([]*AgendaNode{subject}, rest...)
 }
 
+// Moves a node up so it becomes a child of its parent's parent.
+// aka Outdent.
+//
+func (subject *AgendaNode) MoveUpTree() {
+	if subject.Parent == nil {
+		return
+	}
+	parent := subject.Parent
+
+	index := parent.IndexChild(subject)
+	if index == -1 {
+		panic("Error!")
+	}
+	parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
+
+	if parent.Parent == nil {
+		return
+	}
+	parent = parent.Parent
+	parent.Children = append([]*AgendaNode{subject}, parent.Children...)
+	subject.Parent = parent
+}
+
+// Makes subject a child of its closest sibling.
+// aka Indent.
+//
+func (subject *AgendaNode) MoveDownTree() {
+}
+
+// Swap two nodes in thre tree so that left appears where right was, and right
+// appears where left was.
+//
 func (tree *AgendaNode) swap(left *AgendaNode, right *AgendaNode) {
 	tmp := &AgendaNode{}
-	left.move(tmp)
-	right.move(left)
-	tmp.move(right)
+	left.replaceWith(tmp)
+	right.replaceWith(left)
+	tmp.replaceWith(right)
 }
 
-func (src *AgendaNode) move(dst *AgendaNode) {
+// Changes tree pointers so dst appears in the place where src was.
+//
+func (src *AgendaNode) replaceWith(dst *AgendaNode) {
 	dst.Parent = src.Parent
-	dst.NextSibling = src.NextSibling
-	dst.PrevSibling = src.PrevSibling
+	dst.NextContinuation = src.NextContinuation
+	dst.PrevContinuation = src.PrevContinuation
 
-	if dst.NextSibling != nil {
-		dst.NextSibling.PrevSibling = dst
+	if dst.NextContinuation != nil {
+		dst.NextContinuation.PrevContinuation = dst
 	}
 
-	if dst.PrevSibling != nil {
-		dst.PrevSibling.NextSibling = dst
+	if dst.PrevContinuation != nil {
+		dst.PrevContinuation.NextContinuation = dst
 	}
 
 	if dst.Parent != nil {

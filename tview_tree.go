@@ -64,13 +64,11 @@ func (t *Tree) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.
 		case tcell.KeyEnter:
 			t.selectedFunc(t.Selected)
 
-		case tcell.KeyPgUp:
-			//			log.Log("ShuffleUp on selected: %+v", t.Selected)
-			t.Root.ShuffleUp(t.Selected)
+		case tcell.KeyCtrlU:
+			t.Selected.MakePrevSibling()
 
-		case tcell.KeyPgDn:
-			//			log.Log("ShuffleDown on selected: %+v", t.Selected)
-			t.Root.ShuffleDown(t.Selected)
+		case tcell.KeyCtrlD:
+			t.Selected.MakeNextSibling()
 
 		default:
 		}
