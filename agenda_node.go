@@ -355,11 +355,10 @@ func (subject *AgendaNode) MoveDownTree() {
 	}
 
 	parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
-	newParent := parent.Children[index-1] // Previously child before subject.
+	newParent := parent.Children[index-1] // Previous child before subject.
 	for ; newParent.NextContinuation != nil; newParent = newParent.NextContinuation {
 	}
-	newParent.Children = append([]*AgendaNode{subject}, newParent.Children...)
-	subject.Parent = newParent
+	newParent.AddChild(subject)
 }
 
 // Swap two nodes in thre tree so that left appears where right was, and right

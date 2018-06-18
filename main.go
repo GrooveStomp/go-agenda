@@ -3,22 +3,26 @@ package main
 /*
 
 TODO:
-[ ] Bug: Can't add new child for existing item.
-    > Steps:
-      - Create item.
-      - Edit item.
-      - Create new item while editing.
-      - Return to main.
-    > Expected:
-      - New node is a child of edited node.
-    > Actual:
-      - New node is a child of parent node.
+- Bug: Can't add new child for existing item.
+  > Steps:
+    - Create item.
+    - Edit item.
+    - Create new item while editing.
+    - Return to main.
+  > Expected:
+    - New node is a child of edited node.
+  > Actual:
+    - New node is a child of parent node.
 
-[ ] Feature: Render children somehow in the edit dialog.
-[ ] Feature: When adding children in the edit dialog, implicitly create sibling nodes around them.
-[ ] Feature: Collapse siblings if children are moved. (Maybe not without undo?)
-[ ] Feature: Implement a textarea widget, perhaps built upon gemacs or micro or gomacs or gemacs?
-[ ] Feature: Undo.
+- Feature: Render children somehow in the edit dialog. (Like a marker in the text.)
+- Feature: When adding children in the edit dialog, implicitly create continuation nodes around them.
+- Feature: Collapse continuations if children are moved. (Maybe not without undo?)
+- Feature: Implement a textarea widget, perhaps built upon gemacs or micro or gomacs or gemacs?
+- Feature: Undo.
+- Feature: toggle view of text, continuations and children with <tab>
+- Feature: Checkbox
+- Feature: Schedule
+- Feature: Calendar view
 
 */
 
