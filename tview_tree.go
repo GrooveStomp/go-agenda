@@ -14,12 +14,18 @@ type Tree struct {
 }
 
 func NewTree(root *AgendaNode) *Tree {
-	return &Tree{
+	result := &Tree{
 		Box:      tview.NewBox(),
 		Root:     root,
 		Indent:   5,
 		Selected: nil,
 	}
+
+	if len(root.Children) > 0 {
+		result.Selected = root.Children[0]
+	}
+
+	return result
 }
 
 func (t *Tree) Draw(screen tcell.Screen) {
@@ -27,20 +33,24 @@ func (t *Tree) Draw(screen tcell.Screen) {
 	x, y, width, _ /*height*/ := t.GetInnerRect()
 
 	t.Root.Walk(func(node *AgendaNode, indentLevel int) {
-		tview.Print(screen, node.Title, x+(indentLevel*t.Indent), y, width, tview.AlignLeft, tview.Styles.PrimaryTextColor)
-		if t.Selected == node {
-			textWidth := len(node.Title)
-			for bx := 0; bx < textWidth; bx++ {
-				m, c, style, _ := screen.GetContent(x+bx, y)
-				fg, _, _ := style.Decompose()
-				if fg == tview.Styles.PrimaryTextColor {
-					fg = tview.Styles.PrimitiveBackgroundColor
+		if !node.IsContinuation() {
+			tview.Print(screen, node.Title, x+(indentLevel*t.Indent), y, width, tview.AlignLeft, tview.Styles.PrimaryTextColor)
+
+			if t.Selected == node {
+				textWidth := len(node.Title)
+				for bx := 0; bx < textWidth; bx++ {
+					m, c, style, _ := screen.GetContent(x+bx, y)
+					fg, _, _ := style.Decompose()
+					if fg == tview.Styles.PrimaryTextColor {
+						fg = tview.Styles.PrimitiveBackgroundColor
+					}
+					style = style.Background(tview.Styles.PrimaryTextColor).Foreground(fg)
+					screen.SetContent(x+(indentLevel*t.Indent)+bx, y, m, c, style)
 				}
-				style = style.Background(tview.Styles.PrimaryTextColor).Foreground(fg)
-				screen.SetContent(x+(indentLevel*t.Indent)+bx, y, m, c, style)
 			}
+			y++
 		}
-		y++
+
 		tview.Print(screen, node.Text, x+(indentLevel*t.Indent), y, width, tview.AlignLeft, tview.Styles.TertiaryTextColor)
 		y++
 	})
@@ -48,33 +58,44 @@ func (t *Tree) Draw(screen tcell.Screen) {
 
 func (t *Tree) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return t.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+		isAltPressed := (event.Modifiers() & tcell.ModAlt) == tcell.ModAlt
+
 		switch event.Key() {
-		case tcell.KeyDown:
-			next := t.Root.Next(t.Selected)
-			if next != nil {
-				t.Selected = next
-			}
-
-		case tcell.KeyUp:
-			previous := t.Root.Prev(t.Selected)
-			if previous != nil {
-				t.Selected = previous
-			}
-
 		case tcell.KeyEnter:
 			t.selectedFunc(t.Selected)
 
-		case tcell.KeyCtrlU:
-			t.Root.ShuffleUp(t.Selected)
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'k':
+				if isAltPressed {
+					t.Selected.MakePrevSibling()
+				} else {
+					previous := t.Root.Prev(t.Selected)
+					if previous != nil {
+						t.Selected = previous
+					}
+				}
 
-		case tcell.KeyCtrlD:
-			t.Root.ShuffleDown(t.Selected)
+			case 'j':
+				if isAltPressed {
+					t.Selected.MakeNextSibling()
+				} else {
+					next := t.Root.Next(t.Selected)
+					if next != nil {
+						t.Selected = next
+					}
+				}
 
-		case tcell.KeyLeft:
-			t.Selected.MoveUpTree()
+			case 'h':
+				if isAltPressed {
+					t.Selected.MoveUpTree()
+				}
 
-		case tcell.KeyRight:
-			t.Selected.MoveDownTree()
+			case 'l':
+				if isAltPressed {
+					t.Selected.MoveDownTree()
+				}
+			}
 
 		default:
 		}
