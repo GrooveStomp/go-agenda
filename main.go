@@ -14,28 +14,8 @@ TODO:
     > Actual:
       - New node is a child of parent node.
 
-[ ] Bug: Moving items up and down is buggy.
-    > Steps: (Works going down, too.)
-      - Use the default tree.
-      - Move a deeply nested child up (pgup).
-    > Expected:
-      - Child is moved as a child of the next item up.
-    > Actual:
-      - Previous item is deleted, child is moved up.
-
-[✓] Feature: Allow rendering of sub-tree. Ie., root is always blank, so don't render it?
-[✓] Feature: Allow editing an agenda item
-  [✓] <enter> on the item: brings up an edit dialog prepopulated with text.
-  [✓] <enter> in the dialog: returns to main view, list item is updated.
-[✓] Feature: Properly draw nested lists
-  [✓] A given "level" consists of a node and all of its siblings.
-      Each list represents all children for each node in this sibling chain.
-[✓] Feature: llow moving an item up and down in the list.
-[✓] Feature: Allow adding a child item.
-[ ] Feature: Allow indenting/de-indenting an item.
 [ ] Feature: Render children somehow in the edit dialog.
 [ ] Feature: When adding children in the edit dialog, implicitly create sibling nodes around them.
-[ ] Feature: Disable selecting siblings when traversing the list. (Always jump to first sibling.)
 [ ] Feature: Collapse siblings if children are moved. (Maybe not without undo?)
 [ ] Feature: Implement a textarea widget, perhaps built upon gemacs or micro or gomacs or gemacs?
 [ ] Feature: Undo.
@@ -228,12 +208,15 @@ func main() {
 var helpText = `
 ?           Show this help text.
 +           Add a new item.
-<tab>       Expand an item.
 <ctrl+c>    Quit
 <esc>       Quit any popups, dialogs or modals.
 <enter>     Edit selected item.
-<ctrl+up>   Move an item up in the list. (Preserves nesting level.)
-<ctrl+down> Move an item down in the list. (Preserves nesting level.)
+k           Select previous item in list.
+j           Select next item in list.
+<alt>+h     Outdent the item one level.
+<alt>+l     Indent the item one level.
+<alt>+k     Move an item up in the list. (Preserves nesting level.)
+<alt>+j     Move an item down in the list. (Preserves nesting level.)
 `
 
 func NewAgendaTree() *AgendaNode {

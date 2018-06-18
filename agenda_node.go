@@ -103,9 +103,54 @@ func NewNode(title, text string, tags ...string) *AgendaNode {
 	return new
 }
 
-func (parent *AgendaNode) AddChild(node *AgendaNode) {
-	parent.Children = append(parent.Children, node)
-	node.Parent = parent
+func (parent *AgendaNode) AddChild(child *AgendaNode) {
+	parent.Children = append(parent.Children, child)
+	child.Parent = parent
+}
+
+func (parent *AgendaNode) InsertChild(child *AgendaNode, index int) error {
+	if index < 0 || index > len(parent.Children) {
+		return fmt.Errorf("index is out of range")
+	}
+
+	switch index {
+	case 0:
+		parent.Children = append([]*AgendaNode{child}, parent.Children...)
+	case len(parent.Children):
+		parent.Children = append(parent.Children, child)
+	default:
+		rest := parent.Children[index:]
+
+		str := ""
+		for i := range parent.Children[:index] {
+			str = fmt.Sprintf("%s %s", str, parent.Children[i].Title)
+		}
+		str = fmt.Sprintf("%s %s", str, child.Title)
+		for i := range rest {
+			str = fmt.Sprintf("%s %s", str, rest[i].Title)
+		}
+
+		log.Log("%s", str)
+
+		new := append([]*AgendaNode{child}, parent.Children[index:]...)
+		parent.Children = append(parent.Children[:index], new...)
+	}
+
+	child.Parent = parent
+
+	return nil
+}
+
+func (parent *AgendaNode) RemoveChild(child *AgendaNode) {
+	index := parent.IndexChild(child)
+
+	if index == len(parent.Children)-1 {
+		parent.Children = parent.Children[:index]
+	} else {
+		parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
+	}
+
+	child.Parent = nil
 }
 
 func (node *AgendaNode) AddContinuation(new *AgendaNode) {
@@ -124,6 +169,32 @@ func (parent *AgendaNode) IndexChild(child *AgendaNode) int {
 	return -1
 }
 
+// Returns parent, or a continuation of parent where that new node has a valid parent.
+func (subject *AgendaNode) ParentContinuationWithParent() (*AgendaNode, error) {
+	node := subject.Parent
+	if node == nil {
+		return nil, fmt.Errorf("Parent is nil")
+	}
+
+	if node.Parent != nil {
+		return node, nil
+	}
+
+	// Traverse to the first node in the chain of continuations.
+	for ; node.PrevContinuation != nil; node = node.PrevContinuation {
+	}
+
+	if node.Parent == nil {
+		return nil, fmt.Errorf("Couldn't find grandparent.")
+	}
+
+	return node, nil
+}
+
+func (node *AgendaNode) IsContinuation() bool {
+	return node.Parent == nil
+}
+
 func (root *AgendaNode) Prev(subject *AgendaNode) (wanted *AgendaNode) {
 	wanted = nil
 	var last *AgendaNode = nil
@@ -132,7 +203,9 @@ func (root *AgendaNode) Prev(subject *AgendaNode) (wanted *AgendaNode) {
 		if visitee == subject {
 			wanted = last
 		}
-		last = visitee
+		if !visitee.IsContinuation() {
+			last = visitee
+		}
 	})
 
 	return
@@ -143,10 +216,12 @@ func (root *AgendaNode) Next(subject *AgendaNode) (wanted *AgendaNode) {
 	var last *AgendaNode = nil
 
 	root.Walk(func(visitee *AgendaNode, _ int) {
-		if last == subject {
+		if last == subject && !visitee.IsContinuation() {
 			wanted = visitee
 		}
-		last = visitee
+		if !visitee.IsContinuation() {
+			last = visitee
+		}
 	})
 
 	return
@@ -188,9 +263,7 @@ func (node *AgendaNode) Walk(callback func(*AgendaNode, int)) {
 //       Stop. Do nothing.
 //
 func (subject *AgendaNode) MakeNextSibling() {
-	// TODO(AARONO): Debug this!  Doesn't seem to do anything.
-	// This only works for non-continuation nodes. ie., must have a parent.
-	if subject.Parent == nil {
+	if subject.IsContinuation() {
 		log.Log("No parent, only works for non-continuation nodes.")
 		return
 	}
@@ -221,9 +294,8 @@ func (subject *AgendaNode) MakeNextSibling() {
 //       Stop. Do nothing.
 //
 func (subject *AgendaNode) MakePrevSibling() {
-	// TODO(AARONO): Debug this!  Doesn't seem to do anything.
 	// This only works for non-continuation nodes. ie., must have a parent.
-	if subject.Parent == nil {
+	if subject.IsContinuation() {
 		log.Log("No parent, only works for non-continuation nodes.")
 		return
 	}
@@ -236,67 +308,56 @@ func (subject *AgendaNode) MakePrevSibling() {
 		return
 	}
 
-	rest := append(parent.Children[:index], parent.Children[index+1:]...)
-	parent.Children = append([]*AgendaNode{subject}, rest...)
+	a, b := parent.Children[index-1], parent.Children[index]
+	parent.Children[index-1], parent.Children[index] = b, a
 }
 
-// Moves a node up so it becomes a child of its parent's parent.
+// Makes subject the next sibling of its current parent.
 // aka Outdent.
 //
 func (subject *AgendaNode) MoveUpTree() {
-	if subject.Parent == nil {
-		log.Log("Couldn't find parent")
-		return
-	}
-	curParent := subject.Parent
-	canonicalParent := curParent
-
-	index := curParent.IndexChild(subject)
-	if index == -1 {
-		log.Log("Couldn't find index of node in parent")
-		return
-	}
-
-	if curParent.Parent == nil {
-		tmpParent := curParent
-		for ; tmpParent.PrevContinuation != nil; tmpParent = tmpParent.PrevContinuation {
-		}
-		for ; tmpParent.NextContinuation != nil; tmpParent = tmpParent.NextContinuation {
-			if tmpParent.Parent != nil {
-				canonicalParent = tmpParent
-				break
-			}
-		}
-	}
-	if canonicalParent.Parent == nil {
+	parentSib, err := subject.ParentContinuationWithParent()
+	if err != nil {
 		log.Log("Couldn't find parent's parent")
 		return
 	}
 
-	curParent.Children = append(curParent.Children[:index], curParent.Children[index+1:]...)
-	parent := canonicalParent.Parent
-	parent.Children = append([]*AgendaNode{subject}, parent.Children...)
-	subject.Parent = parent
+	subject.Parent.RemoveChild(subject)
+	newParent := parentSib.Parent
+	index := newParent.IndexChild(parentSib)
+	if index == -1 {
+		panic("Oh noes!")
+	}
+
+	err = newParent.InsertChild(subject, index+1)
+	if err != nil {
+		panic(err)
+	}
 }
 
-// Makes subject a child of its closest sibling.
+// Makes subject a child of its previous sibling.
 // aka Indent.
 //
 func (subject *AgendaNode) MoveDownTree() {
-	if subject.Parent == nil {
+	if subject.IsContinuation() {
 		log.Log("Node must have a parent.")
 		return
 	}
 	parent := subject.Parent
 	index := parent.IndexChild(subject)
-	numSiblings := len(parent.Children)
-	if numSiblings == 1 {
+	if len(parent.Children) == 1 {
 		log.Log("Must have at least one sibling.")
+		return
+	}
+	if index == 0 {
+		log.Log("Can't indent from here. Try moving up first.")
 		return
 	}
 
 	parent.Children = append(parent.Children[:index], parent.Children[index+1:]...)
-	newParent := parent.Children[0]
+	newParent := parent.Children[index-1] // Previously child before subject.
+	for ; newParent.NextContinuation != nil; newParent = newParent.NextContinuation {
+	}
 	newParent.Children = append([]*AgendaNode{subject}, newParent.Children...)
 	subject.Parent = newParent
 }
