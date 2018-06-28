@@ -23,6 +23,7 @@ func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode, scratch *
 
 	title.SetBorder(true)
 	title.SetTitle(titleText)
+	title.SetText(node.Title)
 	title.SetDoneFunc(func(key tcell.Key) {
 		node.Title = title.GetText()
 		switch key {
@@ -48,6 +49,7 @@ func NewEditAgendaNodeWidget(app *tview.Application, node *AgendaNode, scratch *
 
 	body.SetBorder(true)
 	body.SetTitle("Body")
+	body.SetText(node.Text)
 	body.SetDoneFunc(func(key tcell.Key) {
 		node.Text = body.GetText()
 		switch key {
